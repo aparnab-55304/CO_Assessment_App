@@ -1059,39 +1059,88 @@ if page == "Overview":
         )
 
         score_counts = (
-            df["Score"]
-            .value_counts()
-            .sort_index()
-            .reset_index()
-        )
+    df["Score"]
+    .value_counts()
+    .sort_index()
+    .reset_index()
+)
 
-        score_counts.columns = [
-            "Score",
-            "Attempts"
-        ]
+score_counts.columns = [
+    "Score",
+    "Attempts"
+]
 
-        fig = px.bar(
-            score_counts,
-            x="Score",
-            y="Attempts",
-            text="Attempts"
-        )
+fig = px.bar(
+    score_counts,
+    x="Score",
+    y="Attempts",
+    text="Attempts",
+    labels={
+        "Score": "Quiz Score (out of 15)",
+        "Attempts": "Number of Attempts"
+    }
+)
 
-        fig.update_layout(
-            height=360,
-            paper_bgcolor="white",
-            plot_bgcolor="white",
-            margin=dict(
-                l=20,
-                r=20,
-                t=20,
-                b=20
-            )
-        )
+fig.update_traces(
+    textposition="outside",
+    textfont=dict(
+        color="#202124",
+        size=12
+    )
+)
 
-        st.plotly_chart(
-            fig,
-            use_container_width=True
+fig.update_layout(
+    height=360,
+    paper_bgcolor="white",
+    plot_bgcolor="white",
+
+    font=dict(
+        color="#202124",
+        family="Arial"
+    ),
+
+    xaxis=dict(
+        title="Quiz Score (out of 15)",
+        title_font=dict(
+            color="#202124",
+            size=13
+        ),
+        tickfont=dict(
+            color="#202124",
+            size=11
+        ),
+        showline=True,
+        linecolor="#D1D5DB",
+        gridcolor="#E5E7EB"
+    ),
+
+    yaxis=dict(
+        title="Number of Attempts",
+        title_font=dict(
+            color="#202124",
+            size=13
+        ),
+        tickfont=dict(
+            color="#202124",
+            size=11
+        ),
+        showline=True,
+        linecolor="#D1D5DB",
+        gridcolor="#E5E7EB"
+    ),
+
+    margin=dict(
+        l=50,
+        r=25,
+        t=25,
+        b=55
+    )
+)
+
+st.plotly_chart(
+    fig,
+    use_container_width=True
+
         )
 
     with chart_right:
