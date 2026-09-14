@@ -158,20 +158,35 @@ st.markdown("""
 # HEADER
 # ============================================================
 
-st.markdown("""
-<div class="header-card">
+st.markdown(
+    """
+    <div style="
+        background-color: white;
+        padding: 28px 32px;
+        border-radius: 18px;
+        border: 1px solid #e5e7eb;
+        margin-bottom: 20px;
+        box-shadow: 0px 3px 12px rgba(0,0,0,0.05);
+    ">
+        <div style="
+            font-size: 32px;
+            font-weight: 700;
+            color: #1f2937;
+        ">
+            📊 Quiz Performance Dashboard
+        </div>
 
-    <div class="header-title">
-        📊 Quiz Performance Dashboard
+        <div style="
+            color: #6b7280;
+            font-size: 15px;
+            margin-top: 6px;
+        ">
+            Participant performance, attempts, scores, time and question analysis
+        </div>
     </div>
-
-    <div class="header-subtitle">
-        Participant performance, attempts, scores, time and question analysis
-    </div>
-
-</div>
-""", unsafe_allow_html=True)
-
+    """,
+    unsafe_allow_html=True
+)
 
 # ============================================================
 # FILE UPLOADER
