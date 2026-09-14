@@ -1,12 +1,11 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
+import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime
 
 
 # ============================================================
-# PAGE CONFIGURATION
+# PAGE SETTINGS
 # ============================================================
 
 st.set_page_config(
@@ -24,158 +23,131 @@ st.set_page_config(
 st.markdown("""
 <style>
 
-    /* ---------- Main page ---------- */
-
+    /* Main background */
     .stApp {
         background-color: #f5f7fa;
     }
 
     .block-container {
+        max-width: 1500px;
         padding-top: 1.5rem;
         padding-bottom: 3rem;
-        max-width: 1500px;
     }
 
-
-    /* ---------- Header ---------- */
-
-    .dashboard-header {
-        background: white;
-        padding: 25px 30px;
-        border-radius: 16px;
+    /* Header */
+    .header-card {
+        background-color: white;
+        padding: 28px 32px;
+        border-radius: 18px;
+        border: 1px solid #e5e7eb;
         margin-bottom: 20px;
-        border: 1px solid #e8ebef;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        box-shadow: 0px 3px 12px rgba(0,0,0,0.05);
     }
 
-    .dashboard-title {
+    .header-title {
         font-size: 32px;
         font-weight: 700;
         color: #1f2937;
-        margin-bottom: 4px;
+        margin: 0;
     }
 
-    .dashboard-subtitle {
-        font-size: 15px;
+    .header-subtitle {
         color: #6b7280;
+        font-size: 15px;
+        margin-top: 5px;
     }
 
-
-    /* ---------- Section titles ---------- */
-
+    /* Section */
     .section-title {
-        font-size: 21px;
+        font-size: 22px;
         font-weight: 700;
         color: #1f2937;
-        margin-top: 25px;
-        margin-bottom: 12px;
+        margin-top: 28px;
+        margin-bottom: 14px;
     }
 
-
-    /* ---------- KPI cards ---------- */
-
-    .kpi-card {
+    /* KPI cards */
+    .kpi {
         background: white;
         padding: 20px;
-        border-radius: 14px;
-        border: 1px solid #e8ebef;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        border-radius: 16px;
+        border: 1px solid #e5e7eb;
         min-height: 125px;
+        box-shadow: 0px 3px 12px rgba(0,0,0,0.04);
     }
 
     .kpi-label {
-        font-size: 14px;
         color: #6b7280;
-        margin-bottom: 8px;
-        font-weight: 500;
+        font-size: 14px;
+        font-weight: 600;
     }
 
     .kpi-value {
+        color: #111827;
         font-size: 30px;
         font-weight: 700;
-        color: #111827;
+        margin-top: 7px;
     }
 
-    .kpi-small {
-        font-size: 13px;
-        color: #6b7280;
+    .kpi-description {
+        color: #9ca3af;
+        font-size: 12px;
         margin-top: 4px;
     }
 
-
-    /* ---------- Leader cards ---------- */
-
-    .leader-card {
+    /* Leader cards */
+    .leader {
         background: white;
         padding: 20px;
-        border-radius: 14px;
-        border: 1px solid #e8ebef;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        min-height: 145px;
+        border-radius: 16px;
+        border: 1px solid #e5e7eb;
+        min-height: 135px;
+        box-shadow: 0px 3px 12px rgba(0,0,0,0.04);
     }
 
-    .leader-title {
-        font-size: 13px;
+    .leader-label {
         color: #6b7280;
+        font-size: 13px;
         font-weight: 600;
-        margin-bottom: 8px;
+        text-transform: uppercase;
     }
 
     .leader-name {
+        color: #111827;
         font-size: 19px;
         font-weight: 700;
-        color: #111827;
-        margin-bottom: 5px;
+        margin-top: 8px;
     }
 
     .leader-value {
-        font-size: 14px;
         color: #4b5563;
+        font-size: 14px;
+        margin-top: 5px;
     }
 
-
-    /* ---------- General cards ---------- */
-
-    .dash-card {
+    /* Information card */
+    .info-card {
         background: white;
         padding: 20px;
-        border-radius: 14px;
-        border: 1px solid #e8ebef;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        border-radius: 16px;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0px 3px 12px rgba(0,0,0,0.04);
     }
 
-
-    /* ---------- Alert cards ---------- */
-
-    .attention-card {
-        background: #fff7ed;
-        border: 1px solid #fed7aa;
-        padding: 18px;
-        border-radius: 12px;
-        margin-bottom: 10px;
-    }
-
+    /* Success */
     .success-card {
         background: #f0fdf4;
         border: 1px solid #bbf7d0;
         padding: 18px;
-        border-radius: 12px;
-    }
-
-
-    /* ---------- File uploader ---------- */
-
-    [data-testid="stFileUploader"] {
-        background: white;
         border-radius: 14px;
-        padding: 10px;
     }
 
-
-    /* ---------- Dataframe ---------- */
-
-    [data-testid="stDataFrame"] {
-        border-radius: 12px;
+    /* Warning */
+    .warning-card {
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        padding: 18px;
+        border-radius: 14px;
     }
 
 </style>
@@ -183,128 +155,18 @@ st.markdown("""
 
 
 # ============================================================
-# HELPER FUNCTIONS
-# ============================================================
-
-def parse_duration(value):
-    """
-    Convert duration values such as:
-    17:25
-    01:17:25
-    9:19
-    into seconds.
-    """
-
-    if pd.isna(value):
-        return np.nan
-
-    value = str(value).strip()
-
-    if value == "":
-        return np.nan
-
-    # Already numeric
-    if isinstance(value, (int, float)):
-        return float(value)
-
-    parts = value.split(":")
-
-    try:
-        if len(parts) == 2:
-            minutes = float(parts[0])
-            seconds = float(parts[1])
-            return minutes * 60 + seconds
-
-        elif len(parts) == 3:
-            hours = float(parts[0])
-            minutes = float(parts[1])
-            seconds = float(parts[2])
-            return hours * 3600 + minutes * 60 + seconds
-
-    except ValueError:
-        return np.nan
-
-    return np.nan
-
-
-def seconds_to_time(seconds):
-    """Convert seconds into MM:SS or HH:MM:SS."""
-
-    if pd.isna(seconds):
-        return "N/A"
-
-    seconds = int(round(seconds))
-
-    hours = seconds // 3600
-    minutes = (seconds % 3600) // 60
-    secs = seconds % 60
-
-    if hours > 0:
-        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
-
-    return f"{minutes:02d}:{secs:02d}"
-
-
-def get_participant_name(row):
-    """Create participant display name."""
-
-    first = str(row.get("First name", "")).strip()
-    last = str(row.get("Last name", "")).strip()
-
-    name = f"{first} {last}".strip()
-
-    if name:
-        return name
-
-    if "Email" in row:
-        return str(row["Email"])
-
-    return "Unknown"
-
-
-def load_file(uploaded_file):
-    """Read CSV or Excel file."""
-
-    if uploaded_file.name.lower().endswith(".csv"):
-        return pd.read_csv(uploaded_file)
-
-    elif uploaded_file.name.lower().endswith((".xlsx", ".xls")):
-        return pd.read_excel(uploaded_file)
-
-    return None
-
-
-def find_score_column(df):
-    """Find the score column automatically."""
-
-    possible_columns = [
-        "Grade/15.00",
-        "Grade",
-        "Score",
-        "Marks",
-        "Total Score"
-    ]
-
-    for col in possible_columns:
-        if col in df.columns:
-            return col
-
-    return None
-
-
-# ============================================================
 # HEADER
 # ============================================================
 
 st.markdown("""
-<div class="dashboard-header">
+<div class="header-card">
 
-    <div class="dashboard-title">
+    <div class="header-title">
         📊 Quiz Performance Dashboard
     </div>
 
-    <div class="dashboard-subtitle">
-        Participant performance, score, time and question-level analytics
+    <div class="header-subtitle">
+        Participant performance, attempts, scores, time and question analysis
     </div>
 
 </div>
@@ -312,27 +174,34 @@ st.markdown("""
 
 
 # ============================================================
-# FILE UPLOAD
+# FILE UPLOADER
 # ============================================================
 
 uploaded_file = st.file_uploader(
-    "Upload Quiz Worksheet",
+    "📁 Upload Quiz Results",
     type=["csv", "xlsx", "xls"],
-    help="Upload the latest quiz result CSV or Excel worksheet."
+    help="Upload the quiz result CSV or Excel worksheet."
 )
 
+
+# ============================================================
+# NO FILE YET
+# ============================================================
 
 if uploaded_file is None:
 
     st.markdown("""
-    <div class="dash-card">
+    <div class="info-card">
 
-    <h3>📁 Upload your quiz results</h3>
+    <h3>📁 Upload your quiz worksheet</h3>
 
     <p>
-    Upload the CSV or Excel worksheet containing participant attempts.
-    The dashboard will automatically calculate all statistics from the
-    uploaded file.
+    Upload the CSV or Excel file containing the quiz attempts.
+    The dashboard will automatically calculate the results.
+    </p>
+
+    <p>
+    <b>Supported:</b> CSV, XLSX, XLS
     </p>
 
     </div>
@@ -342,49 +211,47 @@ if uploaded_file is None:
 
 
 # ============================================================
-# LOAD DATA
+# READ FILE
 # ============================================================
 
 try:
 
-    df = load_file(uploaded_file)
+    if uploaded_file.name.lower().endswith(".csv"):
 
-except Exception as e:
+        df = pd.read_csv(uploaded_file)
 
-    st.error(f"Could not read the file: {e}")
-    st.stop()
+    else:
 
+        df = pd.read_excel(uploaded_file)
 
-if df is None or df.empty:
+except Exception as error:
 
-    st.error("The uploaded file is empty.")
+    st.error(f"Unable to read the file: {error}")
     st.stop()
 
 
 # ============================================================
-# CLEAN COLUMN NAMES
+# BASIC CLEANING
 # ============================================================
 
+if df.empty:
+
+    st.error("The uploaded worksheet is empty.")
+    st.stop()
+
+
+# Remove spaces around column names
 df.columns = df.columns.astype(str).str.strip()
 
 
 # ============================================================
-# FIND SCORE COLUMN
+# DISPLAY FILE INFORMATION
 # ============================================================
 
-score_column = find_score_column(df)
-
-if score_column is None:
-
-    st.error(
-        "Could not find the score column. "
-        "Expected something like 'Grade/15.00', 'Grade' or 'Score'."
-    )
-
-    st.write("Columns found in your file:")
-    st.write(list(df.columns))
-
-    st.stop()
+st.caption(
+    f"Loaded file: **{uploaded_file.name}**  |  "
+    f"{len(df)} attempt(s) | {len(df.columns)} column(s)"
+)
 
 
 # ============================================================
@@ -393,25 +260,96 @@ if score_column is None:
 
 if "First name" in df.columns and "Last name" in df.columns:
 
-    df["Participant"] = df.apply(get_participant_name, axis=1)
+    df["Participant"] = (
+        df["First name"].fillna("").astype(str).str.strip()
+        + " "
+        + df["Last name"].fillna("").astype(str).str.strip()
+    ).str.strip()
 
 elif "Name" in df.columns:
 
-    df["Participant"] = df["Name"].astype(str)
+    df["Participant"] = (
+        df["Name"].fillna("Unknown").astype(str)
+    )
 
 elif "Email" in df.columns:
 
-    df["Participant"] = df["Email"].astype(str)
+    df["Participant"] = (
+        df["Email"].fillna("Unknown").astype(str)
+    )
 
 else:
 
-    df["Participant"] = "Participant " + (
-        df.index + 1
-    ).astype(str)
+    df["Participant"] = [
+        f"Participant {i+1}" for i in range(len(df))
+    ]
+
+
+# Replace empty names
+df.loc[
+    df["Participant"].isin(["", "nan", "None"]),
+    "Participant"
+] = "Unknown"
 
 
 # ============================================================
-# SCORE
+# PARTICIPANT ID
+# ============================================================
+
+# Email is better for identifying the same person
+# when multiple attempts exist.
+
+if "Email" in df.columns:
+
+    df["Participant_ID"] = (
+        df["Email"]
+        .fillna(df["Participant"])
+        .astype(str)
+        .str.strip()
+    )
+
+else:
+
+    df["Participant_ID"] = df["Participant"]
+
+
+# ============================================================
+# FIND SCORE COLUMN
+# ============================================================
+
+score_column = None
+
+possible_score_columns = [
+    "Grade/15.00",
+    "Grade",
+    "Score",
+    "Marks",
+    "Total Score"
+]
+
+for column in possible_score_columns:
+
+    if column in df.columns:
+
+        score_column = column
+        break
+
+
+if score_column is None:
+
+    st.error(
+        "I could not find the score column."
+    )
+
+    st.write("Columns found in your worksheet:")
+
+    st.write(list(df.columns))
+
+    st.stop()
+
+
+# ============================================================
+# CONVERT SCORE TO NUMBER
 # ============================================================
 
 df["Score"] = pd.to_numeric(
@@ -419,48 +357,104 @@ df["Score"] = pd.to_numeric(
     errors="coerce"
 )
 
+
+# Remove rows where score cannot be read
 df = df.dropna(subset=["Score"]).copy()
 
-df["Score"] = df["Score"].clip(lower=0, upper=15)
+
+# Keep scores between 0 and 15
+df["Score"] = df["Score"].clip(0, 15)
 
 
 # ============================================================
-# DURATION
+# PERFECT ATTEMPTS
 # ============================================================
+
+df["Perfect"] = df["Score"] == 15
+
+
+# ============================================================
+# DURATION CONVERSION
+# ============================================================
+
+def duration_to_seconds(value):
+
+    if pd.isna(value):
+        return None
+
+    text = str(value).strip()
+
+    if text == "":
+        return None
+
+    try:
+
+        parts = text.split(":")
+
+        if len(parts) == 2:
+
+            minutes = int(parts[0])
+            seconds = int(parts[1])
+
+            return minutes * 60 + seconds
+
+        elif len(parts) == 3:
+
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            seconds = int(parts[2])
+
+            return (
+                hours * 3600
+                + minutes * 60
+                + seconds
+            )
+
+    except:
+
+        return None
+
+    return None
+
 
 if "Duration" in df.columns:
 
-    df["Duration_Seconds"] = df["Duration"].apply(parse_duration)
+    df["Duration_Seconds"] = (
+        df["Duration"].apply(duration_to_seconds)
+    )
 
 else:
 
-    df["Duration_Seconds"] = np.nan
+    df["Duration_Seconds"] = None
 
 
 # ============================================================
-# PERFECT ATTEMPT
+# FORMAT TIME
 # ============================================================
 
-df["Perfect"] = df["Score"].eq(15)
+def format_time(seconds):
+
+    if pd.isna(seconds) or seconds is None:
+
+        return "N/A"
+
+    seconds = int(seconds)
+
+    minutes = seconds // 60
+    remaining_seconds = seconds % 60
+
+    if minutes >= 60:
+
+        hours = minutes // 60
+        minutes = minutes % 60
+
+        return f"{hours:02d}:{minutes:02d}:{remaining_seconds:02d}"
+
+    return f"{minutes:02d}:{remaining_seconds:02d}"
 
 
 # ============================================================
-# UNIQUE PARTICIPANT IDENTIFIER
-# ============================================================
-
-if "Email" in df.columns:
-
-    df["Participant_ID"] = df["Email"].fillna(
-        df["Participant"]
-    ).astype(str)
-
-else:
-
-    df["Participant_ID"] = df["Participant"].astype(str)
-
-
-# ============================================================
-# KPI CALCULATIONS
+# OVERALL KPIs
 # ============================================================
 
 total_attempts = len(df)
@@ -471,13 +465,11 @@ average_score = df["Score"].mean()
 
 highest_score = df["Score"].max()
 
-lowest_score = df["Score"].min()
-
-perfect_attempts = int(df["Perfect"].sum())
+perfect_count = int(df["Perfect"].sum())
 
 
 # ============================================================
-# KPI SECTION
+# OVERVIEW
 # ============================================================
 
 st.markdown(
@@ -485,21 +477,24 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+
+col1, col2, col3, col4, col5 = st.columns(5)
 
 
-with kpi1:
+with col1:
 
     st.markdown(f"""
-    <div class="kpi-card">
+    <div class="kpi">
 
-        <div class="kpi-label">👥 Participants</div>
+        <div class="kpi-label">
+            👥 PARTICIPANTS
+        </div>
 
         <div class="kpi-value">
             {total_participants}
         </div>
 
-        <div class="kpi-small">
+        <div class="kpi-description">
             Unique participants
         </div>
 
@@ -507,37 +502,41 @@ with kpi1:
     """, unsafe_allow_html=True)
 
 
-with kpi2:
+with col2:
 
     st.markdown(f"""
-    <div class="kpi-card">
+    <div class="kpi">
 
-        <div class="kpi-label">📝 Total Attempts</div>
+        <div class="kpi-label">
+            📝 ATTEMPTS
+        </div>
 
         <div class="kpi-value">
             {total_attempts}
         </div>
 
-        <div class="kpi-small">
-            Quiz attempts recorded
+        <div class="kpi-description">
+            Total quiz attempts
         </div>
 
     </div>
     """, unsafe_allow_html=True)
 
 
-with kpi3:
+with col3:
 
     st.markdown(f"""
-    <div class="kpi-card">
+    <div class="kpi">
 
-        <div class="kpi-label">📊 Average Score</div>
+        <div class="kpi-label">
+            📊 AVERAGE SCORE
+        </div>
 
         <div class="kpi-value">
             {average_score:.2f}/15
         </div>
 
-        <div class="kpi-small">
+        <div class="kpi-description">
             Across all attempts
         </div>
 
@@ -545,18 +544,20 @@ with kpi3:
     """, unsafe_allow_html=True)
 
 
-with kpi4:
+with col4:
 
     st.markdown(f"""
-    <div class="kpi-card">
+    <div class="kpi">
 
-        <div class="kpi-label">🏆 Highest Score</div>
+        <div class="kpi-label">
+            🏆 HIGHEST SCORE
+        </div>
 
         <div class="kpi-value">
             {highest_score:.0f}/15
         </div>
 
-        <div class="kpi-small">
+        <div class="kpi-description">
             Best single attempt
         </div>
 
@@ -564,18 +565,20 @@ with kpi4:
     """, unsafe_allow_html=True)
 
 
-with kpi5:
+with col5:
 
     st.markdown(f"""
-    <div class="kpi-card">
+    <div class="kpi">
 
-        <div class="kpi-label">🎯 Perfect Attempts</div>
-
-        <div class="kpi-value">
-            {perfect_attempts}
+        <div class="kpi-label">
+            🎯 PERFECT ATTEMPTS
         </div>
 
-        <div class="kpi-small">
+        <div class="kpi-value">
+            {perfect_count}
+        </div>
+
+        <div class="kpi-description">
             Attempts scoring 15/15
         </div>
 
@@ -588,7 +591,10 @@ with kpi5:
 # ============================================================
 
 summary = (
-    df.groupby(["Participant_ID", "Participant"])
+    df.groupby(
+        ["Participant_ID", "Participant"],
+        dropna=False
+    )
     .agg(
         Attempts=("Score", "count"),
         Average_Score=("Score", "mean"),
@@ -596,66 +602,53 @@ summary = (
         Lowest_Score=("Score", "min"),
         Perfect_15=("Perfect", "sum"),
         Average_Duration=("Duration_Seconds", "mean"),
-        Shortest_Duration=("Duration_Seconds", "min")
+        Fastest_Duration=("Duration_Seconds", "min")
     )
     .reset_index()
 )
 
 
 # ============================================================
-# FIND SCORE AT SHORTEST ATTEMPT
+# SCORE AT FASTEST ATTEMPT
 # ============================================================
 
-shortest_scores = []
+fastest_score_list = []
+
 
 for participant_id, group in df.groupby("Participant_ID"):
 
-    valid = group.dropna(subset=["Duration_Seconds"])
+    timed = group.dropna(
+        subset=["Duration_Seconds"]
+    )
 
-    if len(valid) > 0:
+    if not timed.empty:
 
-        row = valid.loc[
-            valid["Duration_Seconds"].idxmin()
+        fastest_row = timed.loc[
+            timed["Duration_Seconds"].idxmin()
         ]
 
-        shortest_scores.append({
+        fastest_score_list.append({
             "Participant_ID": participant_id,
-            "Score_at_Shortest": row["Score"]
+            "Score_at_Fastest": fastest_row["Score"]
         })
 
 
-shortest_scores_df = pd.DataFrame(shortest_scores)
+fastest_score_df = pd.DataFrame(
+    fastest_score_list
+)
 
 
-if not shortest_scores_df.empty:
+if not fastest_score_df.empty:
 
     summary = summary.merge(
-        shortest_scores_df,
+        fastest_score_df,
         on="Participant_ID",
         how="left"
     )
 
 else:
 
-    summary["Score_at_Shortest"] = np.nan
-
-
-# ============================================================
-# LEADERS
-# ============================================================
-
-highest_average_row = summary.loc[
-    summary["Average_Score"].idxmax()
-]
-
-highest_single_row = df.loc[
-    df["Score"].idxmax()
-]
-
-
-most_perfect_row = summary.loc[
-    summary["Perfect_15"].idxmax()
-]
+    summary["Score_at_Fastest"] = None
 
 
 # ============================================================
@@ -667,24 +660,61 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+
+# Highest average
+highest_average = summary.loc[
+    summary["Average_Score"].idxmax()
+]
+
+
+# Highest single score
+highest_single = df.loc[
+    df["Score"].idxmax()
+]
+
+
+# Most 15/15
+most_15 = summary.loc[
+    summary["Perfect_15"].idxmax()
+]
+
+
+# Fastest perfect attempt
+perfect_timed = df[
+    (df["Score"] == 15)
+    & (df["Duration_Seconds"].notna())
+]
+
+
+if not perfect_timed.empty:
+
+    fastest_perfect = perfect_timed.loc[
+        perfect_timed["Duration_Seconds"].idxmin()
+    ]
+
+else:
+
+    fastest_perfect = None
+
+
 l1, l2, l3, l4 = st.columns(4)
 
 
 with l1:
 
     st.markdown(f"""
-    <div class="leader-card">
+    <div class="leader">
 
-        <div class="leader-title">
-            🥇 HIGHEST AVERAGE
+        <div class="leader-label">
+            🥇 Highest Average
         </div>
 
         <div class="leader-name">
-            {highest_average_row["Participant"]}
+            {highest_average["Participant"]}
         </div>
 
         <div class="leader-value">
-            Average: {highest_average_row["Average_Score"]:.2f}/15
+            {highest_average["Average_Score"]:.2f}/15 average
         </div>
 
     </div>
@@ -694,18 +724,18 @@ with l1:
 with l2:
 
     st.markdown(f"""
-    <div class="leader-card">
+    <div class="leader">
 
-        <div class="leader-title">
-            🏆 HIGHEST SINGLE SCORE
+        <div class="leader-label">
+            🏆 Highest Single Score
         </div>
 
         <div class="leader-name">
-            {highest_single_row["Participant"]}
+            {highest_single["Participant"]}
         </div>
 
         <div class="leader-value">
-            Score: {highest_single_row["Score"]:.0f}/15
+            {highest_single["Score"]:.0f}/15
         </div>
 
     </div>
@@ -715,47 +745,33 @@ with l2:
 with l3:
 
     st.markdown(f"""
-    <div class="leader-card">
+    <div class="leader">
 
-        <div class="leader-title">
-            🎯 MOST 15/15 ATTEMPTS
+        <div class="leader-label">
+            🎯 Most 15/15 Attempts
         </div>
 
         <div class="leader-name">
-            {most_perfect_row["Participant"]}
+            {most_15["Participant"]}
         </div>
 
         <div class="leader-value">
-            {int(most_perfect_row["Perfect_15"])} perfect attempt(s)
+            {int(most_15["Perfect_15"])} perfect attempt(s)
         </div>
 
     </div>
     """, unsafe_allow_html=True)
 
 
-# ============================================================
-# FASTEST PERFECT ATTEMPT
-# ============================================================
-
-perfect_df = df[
-    (df["Score"] == 15) &
-    (df["Duration_Seconds"].notna())
-].copy()
-
-
 with l4:
 
-    if not perfect_df.empty:
-
-        fastest_perfect = perfect_df.loc[
-            perfect_df["Duration_Seconds"].idxmin()
-        ]
+    if fastest_perfect is not None:
 
         st.markdown(f"""
-        <div class="leader-card">
+        <div class="leader">
 
-            <div class="leader-title">
-                ⚡ FASTEST 15/15
+            <div class="leader-label">
+                ⚡ Fastest 15/15
             </div>
 
             <div class="leader-name">
@@ -763,7 +779,7 @@ with l4:
             </div>
 
             <div class="leader-value">
-                {seconds_to_time(fastest_perfect["Duration_Seconds"])}
+                {format_time(fastest_perfect["Duration_Seconds"])}
             </div>
 
         </div>
@@ -772,10 +788,10 @@ with l4:
     else:
 
         st.markdown("""
-        <div class="leader-card">
+        <div class="leader">
 
-            <div class="leader-title">
-                ⚡ FASTEST 15/15
+            <div class="leader-label">
+                ⚡ Fastest 15/15
             </div>
 
             <div class="leader-name">
@@ -783,7 +799,7 @@ with l4:
             </div>
 
             <div class="leader-value">
-                No 15/15 attempt available
+                No timed 15/15 available
             </div>
 
         </div>
@@ -791,36 +807,35 @@ with l4:
 
 
 # ============================================================
-# TIME PERFORMANCE
+# TIME ANALYSIS
 # ============================================================
 
 st.markdown(
-    '<div class="section-title">⏱️ Time & Performance Analysis</div>',
+    '<div class="section-title">⏱️ Time Performance</div>',
     unsafe_allow_html=True
 )
 
 
-# Fastest overall attempt
-valid_duration = df.dropna(
+timed_df = df.dropna(
     subset=["Duration_Seconds"]
 ).copy()
 
 
-if not valid_duration.empty:
+if not timed_df.empty:
 
-    fastest_overall = valid_duration.loc[
-        valid_duration["Duration_Seconds"].idxmin()
+    fastest_attempt = timed_df.loc[
+        timed_df["Duration_Seconds"].idxmin()
     ]
 
 else:
 
-    fastest_overall = None
+    fastest_attempt = None
 
 
-# Fastest high-score attempt
-high_score_df = valid_duration[
-    valid_duration["Score"] >= 13
-].copy()
+# High score = 13/15 or higher
+high_score_df = timed_df[
+    timed_df["Score"] >= 13
+]
 
 
 if not high_score_df.empty:
@@ -834,23 +849,25 @@ else:
     fastest_high_score = None
 
 
-t1, t2, t3 = st.columns(3)
+time1, time2, time3 = st.columns(3)
 
 
-with t1:
+with time1:
 
-    if fastest_overall is not None:
+    if fastest_attempt is not None:
 
         st.markdown(f"""
-        <div class="dash-card">
+        <div class="info-card">
 
         <b>⚡ Fastest Overall Attempt</b>
 
-        <h2>{seconds_to_time(fastest_overall["Duration_Seconds"])}</h2>
+        <h2>
+        {format_time(fastest_attempt["Duration_Seconds"])}
+        </h2>
 
         <p>
-        <b>{fastest_overall["Participant"]}</b><br>
-        Score: {fastest_overall["Score"]:.0f}/15
+        <b>{fastest_attempt["Participant"]}</b><br>
+        Score: {fastest_attempt["Score"]:.0f}/15
         </p>
 
         </div>
@@ -858,19 +875,21 @@ with t1:
 
     else:
 
-        st.info("Duration data unavailable.")
+        st.info("No duration information available.")
 
 
-with t2:
+with time2:
 
     if fastest_high_score is not None:
 
         st.markdown(f"""
-        <div class="dash-card">
+        <div class="info-card">
 
         <b>🚀 Fastest High-Score Attempt</b>
 
-        <h2>{seconds_to_time(fastest_high_score["Duration_Seconds"])}</h2>
+        <h2>
+        {format_time(fastest_high_score["Duration_Seconds"])}
+        </h2>
 
         <p>
         <b>{fastest_high_score["Participant"]}</b><br>
@@ -885,32 +904,32 @@ with t2:
         st.info("No attempt scoring 13/15 or above.")
 
 
-with t3:
+with time3:
 
-    person_perfect = df[
-        (df["Participant_ID"] == most_perfect_row["Participant_ID"]) &
-        (df["Score"] == 15) &
-        (df["Duration_Seconds"].notna())
+    person_15 = df[
+        (df["Participant_ID"] == most_15["Participant_ID"])
+        & (df["Score"] == 15)
+        & (df["Duration_Seconds"].notna())
     ]
 
-    if not person_perfect.empty:
+    if not person_15.empty:
 
-        shortest_person_perfect = person_perfect.loc[
-            person_perfect["Duration_Seconds"].idxmin()
+        shortest_15 = person_15.loc[
+            person_15["Duration_Seconds"].idxmin()
         ]
 
         st.markdown(f"""
-        <div class="dash-card">
+        <div class="info-card">
 
-        <b>🎯 Shortest 15/15 by Top Performer</b>
+        <b>🎯 Shortest 15/15 of Top Performer</b>
 
         <h2>
-        {seconds_to_time(shortest_person_perfect["Duration_Seconds"])}
+        {format_time(shortest_15["Duration_Seconds"])}
         </h2>
 
         <p>
-        <b>{most_perfect_row["Participant"]}</b><br>
-        {int(most_perfect_row["Perfect_15"])} perfect attempt(s)
+        <b>{most_15["Participant"]}</b><br>
+        {int(most_15["Perfect_15"])} perfect attempt(s)
         </p>
 
         </div>
@@ -918,138 +937,170 @@ with t3:
 
     else:
 
-        st.info("No timed 15/15 attempt available.")
+        st.info(
+            "The top 15/15 performer has no timed perfect attempt."
+        )
 
 
 # ============================================================
-# SCORE DISTRIBUTION
+# CHARTS
 # ============================================================
 
 st.markdown(
-    '<div class="section-title">📈 Score Distribution</div>',
+    '<div class="section-title">📈 Performance Overview</div>',
     unsafe_allow_html=True
 )
 
-c1, c2 = st.columns(2)
+
+chart1, chart2 = st.columns(2)
 
 
-with c1:
+# ------------------------------------------------------------
+# SCORE DISTRIBUTION
+# ------------------------------------------------------------
 
-    score_counts = (
+with chart1:
+
+    score_distribution = (
         df["Score"]
         .value_counts()
         .sort_index()
+        .reset_index()
     )
 
-    fig = go.Figure()
+    score_distribution.columns = [
+        "Score",
+        "Attempts"
+    ]
 
-    fig.add_trace(
-        go.Bar(
-            x=score_counts.index,
-            y=score_counts.values,
-            text=score_counts.values,
-            textposition="outside"
+    fig_score = px.bar(
+        score_distribution,
+        x="Score",
+        y="Attempts",
+        text="Attempts",
+        title="Score Distribution"
+    )
+
+    fig_score.update_traces(
+        textposition="outside"
+    )
+
+    fig_score.update_layout(
+        template="plotly_white",
+        height=420,
+        xaxis_title="Score",
+        yaxis_title="Number of Attempts",
+        margin=dict(
+            l=20,
+            r=20,
+            t=60,
+            b=20
         )
     )
 
-    fig.update_layout(
-        title="Number of Attempts by Score",
-        xaxis_title="Score",
-        yaxis_title="Number of Attempts",
-        template="plotly_white",
-        height=400,
-        margin=dict(l=20, r=20, t=60, b=20)
-    )
-
     st.plotly_chart(
-        fig,
+        fig_score,
         use_container_width=True
     )
 
 
-with c2:
+# ------------------------------------------------------------
+# AVERAGE SCORE BY PARTICIPANT
+# ------------------------------------------------------------
 
-    participant_chart = summary.sort_values(
+with chart2:
+
+    chart_summary = summary.sort_values(
         "Average_Score",
-        ascending=False
-    ).head(15)
-
-    fig2 = go.Figure()
-
-    fig2.add_trace(
-        go.Bar(
-            x=participant_chart["Average_Score"],
-            y=participant_chart["Participant"],
-            orientation="h",
-            text=participant_chart["Average_Score"].round(2),
-            textposition="outside"
-        )
+        ascending=True
     )
 
-    fig2.update_layout(
-        title="Average Score by Participant",
+    fig_participant = px.bar(
+        chart_summary,
+        x="Average_Score",
+        y="Participant",
+        orientation="h",
+        text="Average_Score",
+        title="Average Score by Participant"
+    )
+
+    fig_participant.update_traces(
+        texttemplate="%{text:.2f}",
+        textposition="outside"
+    )
+
+    fig_participant.update_layout(
+        template="plotly_white",
+        height=420,
         xaxis_title="Average Score",
         yaxis_title="",
         xaxis=dict(range=[0, 15]),
-        template="plotly_white",
-        height=400,
-        margin=dict(l=20, r=60, t=60, b=20)
+        margin=dict(
+            l=20,
+            r=60,
+            t=60,
+            b=20
+        )
     )
 
     st.plotly_chart(
-        fig2,
+        fig_participant,
         use_container_width=True
     )
 
 
 # ============================================================
-# PARTICIPANT PERFORMANCE TABLE
+# PARTICIPANT ANALYSIS TABLE
 # ============================================================
 
 st.markdown(
-    '<div class="section-title">👤 Participant Performance</div>',
+    '<div class="section-title">👤 Individual Performance</div>',
     unsafe_allow_html=True
 )
 
 
-display_summary = summary.copy()
+table = summary.copy()
 
-display_summary["Average Score"] = (
-    display_summary["Average_Score"].round(2).astype(str)
-    + "/15"
+
+table["Average Score"] = (
+    table["Average_Score"].round(2)
 )
 
-display_summary["Highest Score"] = (
-    display_summary["Highest_Score"].round(0).astype(int).astype(str)
-    + "/15"
+
+table["Highest Score"] = (
+    table["Highest_Score"].round(0).astype(int)
 )
 
-display_summary["Lowest Score"] = (
-    display_summary["Lowest_Score"].round(0).astype(int).astype(str)
-    + "/15"
+
+table["Lowest Score"] = (
+    table["Lowest_Score"].round(0).astype(int)
 )
 
-display_summary["Average Time"] = (
-    display_summary["Average_Duration"]
-    .apply(seconds_to_time)
+
+table["Average Time"] = (
+    table["Average_Duration"]
+    .apply(format_time)
 )
 
-display_summary["Fastest Time"] = (
-    display_summary["Shortest_Duration"]
-    .apply(seconds_to_time)
+
+table["Fastest Time"] = (
+    table["Fastest_Duration"]
+    .apply(format_time)
 )
 
-display_summary["Score at Fastest Time"] = (
-    display_summary["Score_at_Shortest"]
+
+table["Score at Fastest Time"] = (
+    table["Score_at_Fastest"]
     .apply(
-        lambda x: f"{x:.0f}/15"
+        lambda x:
+        f"{x:.0f}/15"
         if pd.notna(x)
         else "N/A"
     )
 )
 
 
-display_summary = display_summary[
+table = table[
     [
         "Participant",
         "Attempts",
@@ -1061,24 +1112,24 @@ display_summary = display_summary[
         "Fastest Time",
         "Score at Fastest Time"
     ]
-].copy()
+]
 
 
-display_summary = display_summary.rename(
+table = table.rename(
     columns={
         "Perfect_15": "15/15 Attempts"
     }
 )
 
 
-display_summary = display_summary.sort_values(
+table = table.sort_values(
     "Average Score",
     ascending=False
 )
 
 
 st.dataframe(
-    display_summary,
+    table,
     use_container_width=True,
     hide_index=True
 )
@@ -1089,88 +1140,104 @@ st.dataframe(
 # ============================================================
 
 st.markdown(
-    '<div class="section-title">🎯 15/15 Performance Analysis</div>',
+    '<div class="section-title">🎯 15/15 Analysis</div>',
     unsafe_allow_html=True
 )
 
 
-p1, p2 = st.columns(2)
+if perfect_count == 0:
+
+    st.markdown("""
+    <div class="warning-card">
+
+    <b>No 15/15 attempts found.</b>
+
+    <p>
+    There are currently no attempts with a score of exactly 15/15.
+    </p>
+
+    </div>
+    """, unsafe_allow_html=True)
+
+else:
+
+    perfect_counts = (
+        df[df["Perfect"]]
+        .groupby("Participant")
+        .size()
+        .reset_index(name="Perfect Attempts")
+        .sort_values(
+            "Perfect Attempts",
+            ascending=False
+        )
+    )
 
 
-with p1:
+    pc1, pc2 = st.columns(2)
 
-    if perfect_df.empty:
 
-        st.markdown("""
-        <div class="attention-card">
+    with pc1:
 
-        <b>No Perfect Attempts</b>
-
-        <p>
-        No participant has achieved 15/15 in the uploaded worksheet.
-        </p>
-
-        </div>
-        """, unsafe_allow_html=True)
-
-    else:
-
-        perfect_counts = (
-            perfect_df.groupby("Participant")
-            .size()
-            .sort_values(ascending=False)
-            .reset_index(name="Perfect Attempts")
+        fig_perfect = px.bar(
+            perfect_counts,
+            x="Participant",
+            y="Perfect Attempts",
+            text="Perfect Attempts",
+            title="15/15 Attempts by Participant"
         )
 
-        fig3 = go.Figure()
+        fig_perfect.update_traces(
+            textposition="outside"
+        )
 
-        fig3.add_trace(
-            go.Bar(
-                x=perfect_counts["Participant"],
-                y=perfect_counts["Perfect Attempts"],
-                text=perfect_counts["Perfect Attempts"],
-                textposition="outside"
+        fig_perfect.update_layout(
+            template="plotly_white",
+            height=400,
+            xaxis_title="Participant",
+            yaxis_title="Number of 15/15 Attempts",
+            margin=dict(
+                l=20,
+                r=20,
+                t=60,
+                b=80
             )
         )
 
-        fig3.update_layout(
-            title="15/15 Attempts by Participant",
-            xaxis_title="Participant",
-            yaxis_title="Number of 15/15 Attempts",
-            template="plotly_white",
-            height=400,
-            margin=dict(l=20, r=20, t=60, b=80)
-        )
-
         st.plotly_chart(
-            fig3,
+            fig_perfect,
             use_container_width=True
         )
 
 
-with p2:
+    with pc2:
 
-    if not perfect_df.empty:
-
-        perfect_display = perfect_df[
+        perfect_table = df[
+            df["Perfect"]
+        ][
             [
                 "Participant",
-                "Score",
-                "Duration"
+                "Score"
             ]
         ].copy()
 
-        perfect_display = perfect_display.sort_values(
-            "Participant"
-        )
+
+        if "Duration" in df.columns:
+
+            perfect_table["Duration"] = (
+                df.loc[
+                    df["Perfect"],
+                    "Duration"
+                ].values
+            )
+
 
         st.markdown(
-            '<div class="dash-card"><b>Perfect Attempt Details</b></div>',
+            '<div class="info-card"><b>Perfect Attempt Details</b></div>',
             unsafe_allow_html=True
         )
 
         st.dataframe(
-            perfect_display,
+            perfect_table,
             use_container_width=True,
             hide_index=True
         )
@@ -1181,52 +1248,57 @@ with p2:
 # ============================================================
 
 question_columns = [
-    f"Q{i}" for i in range(1, 16)
+    f"Q{i}"
+    for i in range(1, 16)
     if f"Q{i}" in df.columns
 ]
 
 
-if question_columns:
+if len(question_columns) > 0:
 
     st.markdown(
-        '<div class="section-title">❓ Question-Level Analysis</div>',
+        '<div class="section-title">❓ Question Analysis</div>',
         unsafe_allow_html=True
     )
 
+
     question_results = []
 
-    for q in question_columns:
+
+    for question in question_columns:
 
         values = pd.to_numeric(
-            df[q],
+            df[question],
             errors="coerce"
         )
 
-        valid_values = values.dropna()
+        values = values.dropna()
 
-        if len(valid_values) > 0:
 
-            # Assumes 1 = correct and 0 = incorrect
+        if len(values) > 0:
+
             correct_percentage = (
-                (valid_values == 1).mean() * 100
+                (values == 1).mean() * 100
             )
 
             question_results.append({
-                "Question": q,
+                "Question": question,
                 "Correct %": correct_percentage
             })
 
 
-    question_df = pd.DataFrame(question_results)
+    question_df = pd.DataFrame(
+        question_results
+    )
 
 
     if not question_df.empty:
 
-        easiest_question = question_df.loc[
+        easiest = question_df.loc[
             question_df["Correct %"].idxmax()
         ]
 
-        hardest_question = question_df.loc[
+        difficult = question_df.loc[
             question_df["Correct %"].idxmin()
         ]
 
@@ -1241,11 +1313,13 @@ if question_columns:
 
             <b>🟢 Easiest Question</b>
 
-            <h2>{easiest_question["Question"]}</h2>
+            <h2>
+            {easiest["Question"]}
+            </h2>
 
             <p>
-            Correct response rate:
-            <b>{easiest_question["Correct %"]:.1f}%</b>
+            Correct response:
+            <b>{easiest["Correct %"]:.1f}%</b>
             </p>
 
             </div>
@@ -1255,59 +1329,79 @@ if question_columns:
         with q2:
 
             st.markdown(f"""
-            <div class="attention-card">
+            <div class="warning-card">
 
             <b>🔴 Most Difficult Question</b>
 
-            <h2>{hardest_question["Question"]}</h2>
+            <h2>
+            {difficult["Question"]}
+            </h2>
 
             <p>
-            Correct response rate:
-            <b>{hardest_question["Correct %"]:.1f}%</b>
+            Correct response:
+            <b>{difficult["Correct %"]:.1f}%</b>
             </p>
 
             </div>
             """, unsafe_allow_html=True)
 
 
-        fig4 = go.Figure()
+        fig_questions = px.bar(
+            question_df,
+            x="Question",
+            y="Correct %",
+            text="Correct %",
+            title="Question-wise Correct Percentage"
+        )
 
-        fig4.add_trace(
-            go.Bar(
-                x=question_df["Question"],
-                y=question_df["Correct %"],
-                text=question_df["Correct %"].round(1),
-                texttemplate="%{text}%",
-                textposition="outside"
+
+        fig_questions.update_traces(
+            texttemplate="%{text:.1f}%",
+            textposition="outside"
+        )
+
+
+        fig_questions.update_layout(
+            template="plotly_white",
+            height=430,
+            yaxis=dict(
+                range=[0, 110]
+            ),
+            xaxis_title="Question",
+            yaxis_title="Correct Percentage (%)",
+            margin=dict(
+                l=20,
+                r=20,
+                t=60,
+                b=20
             )
         )
 
-        fig4.update_layout(
-            title="Question Correctness Percentage",
-            xaxis_title="Question",
-            yaxis_title="Correct (%)",
-            yaxis=dict(range=[0, 110]),
-            template="plotly_white",
-            height=450,
-            margin=dict(l=20, r=20, t=60, b=20)
-        )
 
         st.plotly_chart(
-            fig4,
+            fig_questions,
             use_container_width=True
         )
 
 
+else:
+
+    st.info(
+        "Q1–Q15 columns were not found in this worksheet."
+    )
+
+
 # ============================================================
-# NEEDS ATTENTION
+# ATTENTION SECTION
 # ============================================================
 
 st.markdown(
-    '<div class="section-title">⚠️ Participants Needing Attention</div>',
+    '<div class="section-title">⚠️ Performance Attention</div>',
     unsafe_allow_html=True
 )
 
 
+# Participants with average below 10
 attention = summary[
     summary["Average_Score"] < 10
 ].copy()
@@ -1318,18 +1412,19 @@ if attention.empty:
     st.markdown("""
     <div class="success-card">
 
-    <b>✅ Good Overall Performance</b>
+    <b>✅ No Immediate Performance Concern</b>
 
     <p>
-    No participant has an average score below 10/15.
+    No participant currently has an average score below 10/15.
     </p>
 
     </div>
     """, unsafe_allow_html=True)
 
+
 else:
 
-    attention_display = attention[
+    attention_table = attention[
         [
             "Participant",
             "Attempts",
@@ -1339,118 +1434,23 @@ else:
         ]
     ].copy()
 
-    attention_display["Average Score"] = (
-        attention_display["Average_Score"].round(2)
-    )
 
-    attention_display["Highest"] = (
-        attention_display["Highest_Score"].astype(int)
-    )
-
-    attention_display["Lowest"] = (
-        attention_display["Lowest_Score"].astype(int)
-    )
-
-    attention_display = attention_display[
-        [
-            "Participant",
-            "Attempts",
-            "Average Score",
-            "Highest",
-            "Lowest"
-        ]
-    ]
-
-    st.dataframe(
-        attention_display,
-        use_container_width=True,
-        hide_index=True
-    )
-
-
-# ============================================================
-# TEAM ANALYSIS
-# ============================================================
-
-team_column = None
-
-for col in ["Team", "team", "Group", "group", "Team Name", "Team_Name"]:
-
-    if col in df.columns:
-        team_column = col
-        break
-
-
-st.markdown(
-    '<div class="section-title">👥 Team Analysis</div>',
-    unsafe_allow_html=True
-)
-
-
-if team_column is None:
-
-    st.markdown("""
-    <div class="dash-card">
-
-    <b>Team information is not available yet.</b>
-
-    <p>
-    The current worksheet does not contain a Team or Group column.
-    Team analysis will automatically appear when you upload a worksheet
-    containing team information.
-    </p>
-
-    </div>
-    """, unsafe_allow_html=True)
-
-
-else:
-
-    team_summary = (
-        df.groupby(team_column)
-        .agg(
-            Participants=("Participant_ID", "nunique"),
-            Attempts=("Score", "count"),
-            Average_Score=("Score", "mean"),
-            Highest_Score=("Score", "max"),
-            Perfect_Attempts=("Perfect", "sum"),
-            Average_Duration=("Duration_Seconds", "mean")
-        )
-        .reset_index()
-    )
-
-    team_summary["Average Time"] = (
-        team_summary["Average_Duration"]
-        .apply(seconds_to_time)
-    )
-
-    team_display = team_summary[
-        [
-            team_column,
-            "Participants",
-            "Attempts",
-            "Average_Score",
-            "Highest_Score",
-            "Perfect_Attempts",
-            "Average Time"
-        ]
-    ].copy()
-
-    team_display["Average_Score"] = (
-        team_display["Average_Score"].round(2)
-    )
-
-    team_display = team_display.rename(
+    attention_table = attention_table.rename(
         columns={
-            team_column: "Team",
             "Average_Score": "Average Score",
             "Highest_Score": "Highest Score",
-            "Perfect_Attempts": "15/15 Attempts"
+            "Lowest_Score": "Lowest Score"
         }
     )
 
+
+    attention_table["Average Score"] = (
+        attention_table["Average Score"].round(2)
+    )
+
+
     st.dataframe(
-        team_display,
+        attention_table,
         use_container_width=True,
         hide_index=True
     )
@@ -1463,11 +1463,16 @@ else:
 st.markdown("---")
 
 st.markdown("""
-<div style="text-align:center; color:#6b7280; font-size:13px;">
+<div style="
+    text-align:center;
+    color:#6b7280;
+    font-size:13px;
+    padding:10px;
+">
 
     📊 Quiz Performance Analytics Dashboard
     <br>
-    Automatically generated from the uploaded worksheet
+    Dynamic analysis based on uploaded quiz results
 
 </div>
 """, unsafe_allow_html=True)
