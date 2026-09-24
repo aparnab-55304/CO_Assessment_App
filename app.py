@@ -229,8 +229,6 @@ def highlight(container, label, name, detail, note=""):
  
  
 # --------------------------------------------------------------------------
-# Sample data (same layout as a Moodle quiz export)
-# --------------------------------------------------------------------------
 def sample_csv() -> str:
     rng = np.random.default_rng(11)
     first_names = ["Aarav", "Diya", "Kiran", "Meera", "Rahul", "Anjali", "Vishnu", "Neha", "Arjun", "Sneha"]
@@ -381,33 +379,7 @@ for n in sorted(scored["Attempt"].unique()):
     })
 st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
  
-# ---- Charts ------------------------------------------------------------
-st.header("Charts")
-c1, c2 = st.columns(2)
-with c1:
-    fig = px.histogram(with_score, x="Best score", nbins=int(np.ceil(max_grade)) + 1,
-                       title="Score distribution (best score per student)")
-    fig.update_layout(yaxis_title="Students", bargap=0.05)
-    st.plotly_chart(fig, width="stretch")
-with c2:
-    counts = students["Attempts"].value_counts().sort_index().reset_index()
-    counts.columns = ["Attempts", "Students"]
-    fig = px.bar(counts, x="Attempts", y="Students", title="Students by number of attempts")
-    fig.update_xaxes(type="category")
-    st.plotly_chart(fig, width="stretch")
- 
-c3, c4 = st.columns(2)
-with c3:
-    by_attempt = scored.groupby("Attempt", as_index=False)["Grade"].mean()
-    fig = px.line(by_attempt, x="Attempt", y="Grade", markers=True, title="Average score by attempt number")
-    fig.update_xaxes(dtick=1)
-    fig.update_yaxes(rangemode="tozero")
-    st.plotly_chart(fig, width="stretch")
-with c4:
-    fig = px.scatter(scored.dropna(subset=["Time (min)"]), x="Time (min)", y="Grade",
-                     hover_name="Student", title="Score vs time taken")
-    st.plotly_chart(fig, width="stretch")
- 
+
 # ---- Detail tables -----------------------------------------------------
 st.header("Details")
 query = st.text_input("Search name or email")
