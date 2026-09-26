@@ -26,8 +26,9 @@ st.set_page_config(
 def norm(text: str) -> str:
     return re.sub(
         r"\s+",
-        " ",
-        str(text).replace("\ufeff", "")
+        "",
+        str(text)
+        .replace("\ufeff", "")
     ).strip().lower()
 
 
