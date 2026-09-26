@@ -1775,83 +1775,6 @@ if len(team_df) == 2:
 # TEAM PERFORMANCE CHART
 # ==========================================================================
 
-st.subheader(
-    "📊 Team Performance Comparison"
-)
-
-chart_data = team_df[
-    [
-        "Team",
-        "Average best score",
-        "Average time (min)",
-        "Average improvement"
-    ]
-].copy()
-
-chart_data = chart_data.rename(
-    columns={
-        "Average best score": "Average Best Score",
-        "Average time (min)": "Average Time (min)",
-        "Average improvement": "Average Improvement"
-    }
-)
-
-fig_score = px.bar(
-    chart_data,
-    x="Team",
-    y="Average Best Score",
-    text="Average Best Score",
-    title="Average Best Score by Team"
-)
-
-fig_score.update_traces(
-    texttemplate="%{text:.2f}",
-    textposition="outside"
-)
-
-st.plotly_chart(
-    fig_score,
-    use_container_width=True
-)
-
-
-fig_time = px.bar(
-    chart_data,
-    x="Team",
-    y="Average Time (min)",
-    text="Average Time (min)",
-    title="Average Time by Team"
-)
-
-fig_time.update_traces(
-    texttemplate="%{text:.2f}",
-    textposition="outside"
-)
-
-st.plotly_chart(
-    fig_time,
-    use_container_width=True
-)
-
-
-fig_improvement = px.bar(
-    chart_data,
-    x="Team",
-    y="Average Improvement",
-    text="Average Improvement",
-    title="Average Improvement by Team"
-)
-
-fig_improvement.update_traces(
-    texttemplate="%{text:.2f}",
-    textposition="outside"
-)
-
-st.plotly_chart(
-    fig_improvement,
-    use_container_width=True
-)
-
 
 # ==========================================================================
 # TEAM MEMBERS
@@ -1908,7 +1831,7 @@ apple_members = [
 ]
 
 orange_members = [
-    "Sreelakshmi",
+    "SreelakshmiAnilkumar",
     "Aiswarya",
     "Nandana"
 ]
