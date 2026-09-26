@@ -206,7 +206,7 @@ TEAM_MAP = {
     "jintu": "Apple",
 
     # Orange Team
-    "sreelakshmiAnilkumar": "Orange",
+    "SreelakhsmiAnilkumar": "Orange",
     "aiswarya": "Orange",
     "nаndana": "Orange",
 }
