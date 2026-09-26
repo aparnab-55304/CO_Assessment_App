@@ -2174,23 +2174,4 @@ st.download_button(
     file_name="team_summary.csv",
     mime="text/csv"
 )
-```
 
-### One small correction before you run it
-
-In the `TEAM_MAP`, I included a Unicode-safe fallback line for Nandana. The important mapping is:
-
-```python
-"nandana": "Orange"
-```
-
-So **Aparna, Jayalakshmi, Ganga and Jintu → Apple**, while **Sreelakshmi, Aiswarya and Nandana → Orange**.
-
-The comparison is deliberately based on **averages**, not raw totals:
-
-* **Average best score** → fair despite 4 vs 3 members
-* **Average time** → fair comparison of speed
-* **Average improvement** → fair comparison of learning/progress
-* Individual highest score/time are still shown separately
-
-That means the dashboard won't automatically favor Apple just because Apple has four members.
