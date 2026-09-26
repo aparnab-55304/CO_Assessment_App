@@ -215,11 +215,10 @@ TEAM_MAP = {
     "jintu": "Apple",
 
     # Orange Team
-    "sreelakshmianilkumar": "Orange",
+    "sreelakhsmiAnilkumar": "Orange",
     "aiswarya": "Orange",
     "nandana": "Orange",
 }
-
 
 def assign_team(student_name):
 
