@@ -197,6 +197,10 @@ def ordinal(n: int) -> str:
 # TEAM ASSIGNMENT
 # ==========================================================================
 
+# ==========================================================================
+# TEAM ASSIGNMENT
+# ==========================================================================
+
 TEAM_MAP = {
 
     # Apple Team
@@ -206,14 +210,10 @@ TEAM_MAP = {
     "jintu": "Apple",
 
     # Orange Team
-    "SreelakhsmiAnilkumar": "Orange",
+    "sreelakshmianilkumar": "Orange",
     "aiswarya": "Orange",
-    "nаndana": "Orange",
+    "nandana": "Orange",
 }
-
-
-# Fix possible Unicode/name variation
-TEAM_MAP["nandana"] = "Orange"
 
 
 def assign_team(student_name):
