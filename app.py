@@ -1,239 +1,125 @@
 import streamlit as st
 import pandas as pd
 
-# ------------------------------------------------------------
-
-# PAGE SETTINGS
-
-# ------------------------------------------------------------
-
 st.set_page_config(
-page_title="Student Improvement Analysis",
-page_icon="📈",
-layout="wide"
+    page_title="Student Improvement Analysis",
+    page_icon="📈",
+    layout="wide"
 )
-
-# ------------------------------------------------------------
-
-# TITLE
-
-# ------------------------------------------------------------
 
 st.title("📊 Student Performance Dashboard")
 st.header("📈 Student Improvement Analysis")
+st.write("Upload the assessment CSV file to analyse student performance.")
 
-st.write(
-"Upload the assessment CSV file to analyse student scores, "
-"percentages, improvement and question-wise performance."
-)
-
-# ------------------------------------------------------------
-
-# SIDEBAR - FILE UPLOAD
-
-# ------------------------------------------------------------
+# --------------------------------------------------
+# FILE UPLOAD
+# --------------------------------------------------
 
 st.sidebar.header("📂 Upload CSV")
 
 uploaded_file = st.sidebar.file_uploader(
-"Choose your CSV file",
-type=["csv"]
+    "Choose your CSV file",
+    type=["csv"]
 )
 
-# ------------------------------------------------------------
+if uploaded_file is None: st.info("Please upload your CSV file from the sidebar."); st.stop()
 
-# STOP UNTIL FILE IS UPLOADED
-
-# ------------------------------------------------------------
-
-if uploaded_file is None:
-st.info("Please upload your CSV file from the sidebar.")
-st.stop()
-
-# ------------------------------------------------------------
-
+# --------------------------------------------------
 # READ CSV
+# --------------------------------------------------
 
-# ------------------------------------------------------------
-
-try:
 df = pd.read_csv(uploaded_file)
-except Exception as e:
-st.error(f"Error reading CSV file: {e}")
-st.stop()
-
-# ------------------------------------------------------------
-
-# CLEAN COLUMN NAMES
-
-# ------------------------------------------------------------
 
 df.columns = df.columns.astype(str).str.strip()
 
-# ------------------------------------------------------------
+st.success("✅ CSV uploaded successfully.")
 
+# --------------------------------------------------
 # SHOW ORIGINAL DATA
-
-# ------------------------------------------------------------
+# --------------------------------------------------
 
 st.subheader("📋 Uploaded Data")
 
 st.dataframe(
-df,
-use_container_width=True,
-hide_index=True
+    df,
+    use_container_width=True,
+    hide_index=True
 )
 
-# ------------------------------------------------------------
-
+# --------------------------------------------------
 # FIND SCORE COLUMN
-
-# ------------------------------------------------------------
-
-score_column = None
+# --------------------------------------------------
 
 possible_score_columns = [
-"Grade/15.00",
-"Grade",
-"Score",
-"Marks",
-"Total",
-"Final Score"
+    "Grade/15.00",
+    "Grade",
+    "Score",
+    "Marks",
+    "Total",
+    "Final Score"
 ]
 
-for column in possible_score_columns:
-if column in df.columns:
-score_column = column
-break
+numeric_columns = df.select_dtypes(
+    include="number"
+).columns.tolist()
 
-# ------------------------------------------------------------
+score_column = next(
+    (column for column in possible_score_columns if column in df.columns),
+    numeric_columns[0] if numeric_columns else None
+)
 
-# AUTOMATIC SCORE COLUMN DETECTION
+score_column is None and st.error("❌ No score column was found.")
+score_column is None and st.write("Available columns:", list(df.columns))
+score_column is None and st.stop()
 
-# ------------------------------------------------------------
-
-if score_column is None:
-
-```
-for column in df.columns:
-
-    numeric_values = pd.to_numeric(
-        df[column],
-        errors="coerce"
-    )
-
-    if numeric_values.notna().sum() > 0:
-        score_column = column
-        break
-```
-
-# ------------------------------------------------------------
-
-# SCORE COLUMN CHECK
-
-# ------------------------------------------------------------
-
-if score_column is None:
-
-```
-st.error("❌ Could not find a numerical score column.")
-
-st.write("Columns detected in your CSV:")
-
-st.write(list(df.columns))
-
-st.stop()
-```
-
-# ------------------------------------------------------------
-
-# CONVERT SCORE TO NUMBER
-
-# ------------------------------------------------------------
+# --------------------------------------------------
+# CONVERT SCORE
+# --------------------------------------------------
 
 df[score_column] = pd.to_numeric(
-df[score_column],
-errors="coerce"
+    df[score_column],
+    errors="coerce"
 )
 
 df = df.dropna(
-subset=[score_column]
+    subset=[score_column]
 ).copy()
 
-# ------------------------------------------------------------
+# --------------------------------------------------
+# STUDENT NAME
+# --------------------------------------------------
 
-# DETERMINE STUDENT NAME
+first_name = df.get(
+    "First name",
+    pd.Series("", index=df.index)
+)
 
-# ------------------------------------------------------------
+last_name = df.get(
+    "Last name",
+    pd.Series("", index=df.index)
+)
 
-if "First name" in df.columns and "Last name" in df.columns:
+email = df.get(
+    "Email address",
+    pd.Series("", index=df.index)
+)
 
-```
 df["Student Name"] = (
-    df["First name"].fillna("").astype(str).str.strip()
+    first_name.fillna("").astype(str).str.strip()
     + " "
-    + df["Last name"].fillna("").astype(str).str.strip()
+    + last_name.fillna("").astype(str).str.strip()
 ).str.strip()
-```
 
-elif "First name" in df.columns:
-
-```
-df["Student Name"] = (
-    df["First name"]
-    .fillna("")
-    .astype(str)
-    .str.strip()
+df["Student Name"] = df["Student Name"].where(
+    df["Student Name"].ne(""),
+    email.fillna("").astype(str).str.strip()
 )
-```
 
-elif "Last name" in df.columns:
-
-```
-df["Student Name"] = (
-    df["Last name"]
-    .fillna("")
-    .astype(str)
-    .str.strip()
-)
-```
-
-elif "Email address" in df.columns:
-
-```
-df["Student Name"] = (
-    df["Email address"]
-    .fillna("")
-    .astype(str)
-    .str.strip()
-)
-```
-
-else:
-
-```
-df["Student Name"] = [
-    f"Student {i + 1}"
-    for i in range(len(df))
-]
-```
-
-# ------------------------------------------------------------
-
-# MAXIMUM MARK
-
-# ------------------------------------------------------------
+# --------------------------------------------------
+# BASIC STATISTICS
+# --------------------------------------------------
 
 max_score = 15.0
-
-if df[score_column].max() > 15:
-max_score = float(df[score_column].max())
-
-# ------------------------------------------------------------
-
-# BASIC STATISTICS
-
-# ------------------------------------------------------------
 
 student_count = len(df)
 
@@ -245,434 +131,377 @@ lowest_score = df[score_column].min()
 
 median_score = df[score_column].median()
 
-# ------------------------------------------------------------
-
+# --------------------------------------------------
 # PERCENTAGE
-
-# ------------------------------------------------------------
+# --------------------------------------------------
 
 df["Percentage"] = (
-df[score_column] / max_score
+    df[score_column] / max_score
 ) * 100
 
-df["Percentage"] = df["Percentage"].clip(0, 100)
+df["Percentage"] = df["Percentage"].clip(
+    0,
+    100
+)
 
-# ------------------------------------------------------------
-
+# --------------------------------------------------
 # IMPROVEMENT
-
-# ------------------------------------------------------------
-
-# Positive = above class average
-
-# Negative = below class average
+# --------------------------------------------------
 
 df["Improvement"] = (
-df[score_column] - average_score
+    df[score_column] - average_score
 )
 
-# ------------------------------------------------------------
-
+# --------------------------------------------------
 # PERFORMANCE CATEGORY
+# --------------------------------------------------
 
-# ------------------------------------------------------------
-
-def performance_category(score):
-
-```
-percentage = (
-    score / max_score
-) * 100
-
-if percentage >= 80:
-    return "Excellent"
-
-elif percentage >= 60:
-    return "Good"
-
-elif percentage >= 40:
-    return "Average"
-
-else:
-    return "Needs Improvement"
-```
-
-df["Performance"] = df[score_column].apply(
-performance_category
+df["Performance"] = pd.cut(
+    df["Percentage"],
+    bins=[-1, 40, 60, 80, 101],
+    labels=[
+        "Needs Improvement",
+        "Average",
+        "Good",
+        "Excellent"
+    ],
+    right=False
 )
 
-# ------------------------------------------------------------
+# --------------------------------------------------
+# IMPROVEMENT STATUS
+# --------------------------------------------------
 
-# OVERALL METRICS
+df["Improvement Status"] = pd.cut(
+    df["Improvement"],
+    bins=[
+        float("-inf"),
+        -0.000001,
+        0.000001,
+        float("inf")
+    ],
+    labels=[
+        "Below Class Average",
+        "At Class Average",
+        "Above Class Average"
+    ]
+)
 
-# ------------------------------------------------------------
+# --------------------------------------------------
+# MAIN METRICS
+# --------------------------------------------------
 
 st.subheader("📌 Overall Performance")
 
 col1, col2, col3, col4, col5 = st.columns(5)
 
-with col1:
-st.metric(
-"👨‍🎓 Students",
-student_count
+col1.metric(
+    "👨‍🎓 Students",
+    student_count
 )
 
-with col2:
-st.metric(
-"📊 Class Average",
-f"{average_score:.2f}"
+col2.metric(
+    "📊 Class Average",
+    f"{average_score:.2f}/15"
 )
 
-with col3:
-st.metric(
-"🏆 Highest",
-f"{highest_score:.2f}"
+col3.metric(
+    "🏆 Highest",
+    f"{highest_score:.2f}"
 )
 
-with col4:
-st.metric(
-"📉 Lowest",
-f"{lowest_score:.2f}"
+col4.metric(
+    "📉 Lowest",
+    f"{lowest_score:.2f}"
 )
 
-with col5:
-st.metric(
-"📍 Median",
-f"{median_score:.2f}"
+col5.metric(
+    "📍 Median",
+    f"{median_score:.2f}"
 )
 
-# ------------------------------------------------------------
-
+# --------------------------------------------------
 # PERFORMANCE COUNTS
+# --------------------------------------------------
 
-# ------------------------------------------------------------
-
-excellent = (
-df["Performance"] == "Excellent"
-).sum()
-
-good = (
-df["Performance"] == "Good"
-).sum()
-
-average = (
-df["Performance"] == "Average"
-).sum()
-
-needs_improvement = (
-df["Performance"] == "Needs Improvement"
-).sum()
+performance_counts = (
+    df["Performance"]
+    .value_counts()
+    .reindex(
+        [
+            "Excellent",
+            "Good",
+            "Average",
+            "Needs Improvement"
+        ],
+        fill_value=0
+    )
+)
 
 st.subheader("📊 Performance Categories")
 
-col1, col2, col3, col4 = st.columns(4)
+c1, c2, c3, c4 = st.columns(4)
 
-with col1:
-st.metric("🌟 Excellent", excellent)
-
-with col2:
-st.metric("👍 Good", good)
-
-with col3:
-st.metric("📘 Average", average)
-
-with col4:
-st.metric(
-"⚠️ Needs Improvement",
-needs_improvement
+c1.metric(
+    "🌟 Excellent",
+    int(performance_counts["Excellent"])
 )
 
-# ------------------------------------------------------------
+c2.metric(
+    "👍 Good",
+    int(performance_counts["Good"])
+)
 
+c3.metric(
+    "📘 Average",
+    int(performance_counts["Average"])
+)
+
+c4.metric(
+    "⚠️ Needs Improvement",
+    int(performance_counts["Needs Improvement"])
+)
+
+# --------------------------------------------------
 # SCORE CHART
-
-# ------------------------------------------------------------
+# --------------------------------------------------
 
 st.subheader("📈 Student Score Comparison")
 
 score_chart = (
-df[
-["Student Name", score_column]
-]
-.sort_values(
-by=score_column,
-ascending=False
-)
-.set_index("Student Name")
+    df[
+        ["Student Name", score_column]
+    ]
+    .sort_values(
+        score_column,
+        ascending=False
+    )
+    .set_index("Student Name")
 )
 
 st.bar_chart(
-score_chart,
-height=450
+    score_chart,
+    height=450
 )
 
-# ------------------------------------------------------------
+# --------------------------------------------------
+# SCORE DATA LABELS
+# --------------------------------------------------
 
-# SCORE LABEL TABLE
-
-# ------------------------------------------------------------
-
-st.subheader("🔢 Score Details")
+st.markdown("### 🔢 Score Details")
 
 score_details = df[
-[
-"Student Name",
-score_column,
-"Percentage",
-"Performance"
-]
+    [
+        "Student Name",
+        score_column,
+        "Percentage",
+        "Performance"
+    ]
 ].copy()
 
 score_details["Score"] = (
-score_details[score_column]
-.round(2)
-.astype(str)
-+ " / "
-+ str(int(max_score))
+    score_details[score_column]
+    .round(2)
+    .astype(str)
+    + " / 15"
 )
 
 score_details["Percentage"] = (
-score_details["Percentage"]
-.round(2)
+    score_details["Percentage"]
+    .round(2)
+    .astype(str)
+    + "%"
 )
 
 score_details = score_details.sort_values(
-by=score_column,
-ascending=False
+    score_column,
+    ascending=False
 )
 
 st.dataframe(
-score_details[
-[
-"Student Name",
-"Score",
-"Percentage",
-"Performance"
-]
-],
-use_container_width=True,
-hide_index=True
+    score_details[
+        [
+            "Student Name",
+            "Score",
+            "Percentage",
+            "Performance"
+        ]
+    ],
+    use_container_width=True,
+    hide_index=True
 )
 
-# ------------------------------------------------------------
-
+# --------------------------------------------------
 # IMPROVEMENT CHART
-
-# ------------------------------------------------------------
+# --------------------------------------------------
 
 st.subheader("📈 Improvement Relative to Class Average")
 
 improvement_chart = (
-df[
-["Student Name", "Improvement"]
-]
-.sort_values(
-by="Improvement",
-ascending=False
-)
-.set_index("Student Name")
+    df[
+        ["Student Name", "Improvement"]
+    ]
+    .sort_values(
+        "Improvement",
+        ascending=False
+    )
+    .set_index("Student Name")
 )
 
 st.bar_chart(
-improvement_chart,
-height=450
+    improvement_chart,
+    height=450
 )
 
-# ------------------------------------------------------------
+# --------------------------------------------------
+# IMPROVEMENT DETAILS
+# --------------------------------------------------
 
-# IMPROVEMENT TABLE
+st.markdown("### 🔎 Improvement Details")
 
-# ------------------------------------------------------------
-
-st.subheader("🔎 Improvement Details")
-
-improvement_table = df[
-[
-"Student Name",
-score_column,
-"Improvement",
-"Performance"
-]
+improvement_details = df[
+    [
+        "Student Name",
+        score_column,
+        "Improvement",
+        "Improvement Status"
+    ]
 ].copy()
 
-improvement_table["Improvement"] = (
-improvement_table["Improvement"]
-.round(2)
+improvement_details["Improvement"] = (
+    improvement_details["Improvement"]
+    .round(2)
 )
 
-def improvement_status(value):
-
-```
-if value > 0:
-    return "Above Class Average"
-
-elif value == 0:
-    return "At Class Average"
-
-else:
-    return "Below Class Average"
-```
-
-improvement_table["Status"] = (
-improvement_table["Improvement"]
-.apply(improvement_status)
-)
-
-improvement_table = improvement_table.sort_values(
-by="Improvement",
-ascending=False
+improvement_details = improvement_details.sort_values(
+    "Improvement",
+    ascending=False
 )
 
 st.dataframe(
-improvement_table,
-use_container_width=True,
-hide_index=True
+    improvement_details,
+    use_container_width=True,
+    hide_index=True
 )
 
-# ------------------------------------------------------------
-
+# --------------------------------------------------
 # PERCENTAGE CHART
-
-# ------------------------------------------------------------
+# --------------------------------------------------
 
 st.subheader("📊 Student Percentage")
 
 percentage_chart = (
-df[
-["Student Name", "Percentage"]
-]
-.sort_values(
-by="Percentage",
-ascending=False
-)
-.set_index("Student Name")
+    df[
+        ["Student Name", "Percentage"]
+    ]
+    .sort_values(
+        "Percentage",
+        ascending=False
+    )
+    .set_index("Student Name")
 )
 
 st.bar_chart(
-percentage_chart,
-height=450
+    percentage_chart,
+    height=450
 )
 
-# ------------------------------------------------------------
-
+# --------------------------------------------------
 # TOP STUDENTS
-
-# ------------------------------------------------------------
+# --------------------------------------------------
 
 st.subheader("🏆 Top Performing Students")
 
 top_students = df.nlargest(
-min(5, len(df)),
-score_column
+    min(5, len(df)),
+    score_column
 )[
-[
-"Student Name",
-score_column,
-"Percentage",
-"Performance"
-]
+    [
+        "Student Name",
+        score_column,
+        "Percentage",
+        "Performance"
+    ]
 ].copy()
 
 top_students["Percentage"] = (
-top_students["Percentage"]
-.round(2)
+    top_students["Percentage"]
+    .round(2)
 )
 
 st.dataframe(
-top_students,
-use_container_width=True,
-hide_index=True
+    top_students,
+    use_container_width=True,
+    hide_index=True
 )
 
-# ------------------------------------------------------------
-
+# --------------------------------------------------
 # STUDENTS BELOW AVERAGE
-
-# ------------------------------------------------------------
+# --------------------------------------------------
 
 st.subheader("⚠️ Students Below Class Average")
 
 below_average = df[
-df[score_column] < average_score
+    df[score_column] < average_score
 ][
-[
-"Student Name",
-score_column,
-"Percentage",
-"Improvement"
-]
+    [
+        "Student Name",
+        score_column,
+        "Percentage",
+        "Improvement"
+    ]
 ].copy()
 
 below_average["Percentage"] = (
-below_average["Percentage"]
-.round(2)
+    below_average["Percentage"]
+    .round(2)
 )
 
 below_average["Improvement"] = (
-below_average["Improvement"]
-.round(2)
+    below_average["Improvement"]
+    .round(2)
 )
 
-if len(below_average) > 0:
-
-```
 st.dataframe(
     below_average,
     use_container_width=True,
     hide_index=True
 )
-```
 
-else:
-
-```
-st.success(
-    "✅ No student is below the class average."
-)
-```
-
-# ------------------------------------------------------------
-
+# --------------------------------------------------
 # DURATION
+# --------------------------------------------------
 
-# ------------------------------------------------------------
-
-if "Duration" in df.columns:
-
-```
 st.subheader("⏱️ Assessment Duration")
 
-duration_data = df[
-    [
-        "Student Name",
-        "Duration"
-    ]
-].copy()
+duration_data = pd.DataFrame()
+
+duration_data["Student Name"] = df["Student Name"]
+
+duration_data["Duration"] = df.get(
+    "Duration",
+    pd.Series("Not available", index=df.index)
+)
 
 st.dataframe(
     duration_data,
     use_container_width=True,
     hide_index=True
 )
-```
 
-# ------------------------------------------------------------
-
+# --------------------------------------------------
 # STATUS
+# --------------------------------------------------
 
-# ------------------------------------------------------------
-
-if "Status" in df.columns:
-
-```
 st.subheader("📌 Student Status")
 
-status_data = (
-    df["Status"]
-    .fillna("Unknown")
-    .value_counts()
-    .rename_axis("Status")
-    .reset_index(name="Students")
+status_data = pd.DataFrame()
+
+status_data["Student Name"] = df["Student Name"]
+
+status_data["Status"] = df.get(
+    "Status",
+    pd.Series("Not available", index=df.index)
 )
 
 st.dataframe(
@@ -680,24 +509,16 @@ st.dataframe(
     use_container_width=True,
     hide_index=True
 )
-```
 
-# ------------------------------------------------------------
-
+# --------------------------------------------------
 # QUESTION-WISE ANALYSIS
-
-# ------------------------------------------------------------
+# --------------------------------------------------
 
 question_columns = [
-column
-for column in df.columns
-if str(column).upper().startswith("Q")
+    column
+    for column in df.columns
+    if str(column).upper().startswith("Q")
 ]
-
-if len(question_columns) > 0:
-
-```
-st.subheader("📝 Question-wise Analysis")
 
 question_results = []
 
@@ -720,10 +541,7 @@ question_summary = pd.DataFrame(
     question_results
 )
 
-question_summary["Average"] = (
-    question_summary["Average"]
-    .round(2)
-)
+st.subheader("📝 Question-wise Analysis")
 
 st.dataframe(
     question_summary,
@@ -731,100 +549,84 @@ st.dataframe(
     hide_index=True
 )
 
-question_chart = (
-    question_summary[
-        ["Question", "Average"]
-    ]
-    .set_index("Question")
-)
-
-st.bar_chart(
-    question_chart,
+question_columns and st.bar_chart(
+    question_summary.set_index("Question")["Average"],
     height=400
 )
-```
 
-# ------------------------------------------------------------
-
+# --------------------------------------------------
 # COMPLETE ANALYSIS
-
-# ------------------------------------------------------------
+# --------------------------------------------------
 
 st.subheader("📋 Complete Student Analysis")
 
 complete_columns = [
-"Student Name",
-score_column,
-"Percentage",
-"Improvement",
-"Performance"
+    "Student Name",
+    score_column,
+    "Percentage",
+    "Improvement",
+    "Performance",
+    "Improvement Status"
 ]
 
-for column in [
-"Email address",
-"Status",
-"Started",
-"Completed",
-"Duration"
-]:
+extra_columns = [
+    "Email address",
+    "Status",
+    "Started",
+    "Completed",
+    "Duration"
+]
 
-```
-if column in df.columns:
-    complete_columns.append(column)
-```
+complete_columns += [
+    column
+    for column in extra_columns
+    if column in df.columns
+]
 
 complete_df = df[
-complete_columns
+    complete_columns
 ].copy()
 
 complete_df["Percentage"] = (
-complete_df["Percentage"]
-.round(2)
+    complete_df["Percentage"]
+    .round(2)
 )
 
 complete_df["Improvement"] = (
-complete_df["Improvement"]
-.round(2)
+    complete_df["Improvement"]
+    .round(2)
 )
 
 complete_df = complete_df.sort_values(
-by=score_column,
-ascending=False
+    score_column,
+    ascending=False
 )
 
 st.dataframe(
-complete_df,
-use_container_width=True,
-hide_index=True
+    complete_df,
+    use_container_width=True,
+    hide_index=True
 )
 
-# ------------------------------------------------------------
-
+# --------------------------------------------------
 # DOWNLOAD
-
-# ------------------------------------------------------------
+# --------------------------------------------------
 
 st.subheader("⬇️ Download Analysis")
 
 csv_output = complete_df.to_csv(
-index=False
+    index=False
 )
 
 st.download_button(
-label="📥 Download Complete Analysis CSV",
-data=csv_output,
-file_name="student_improvement_analysis.csv",
-mime="text/csv"
+    label="📥 Download Complete Analysis CSV",
+    data=csv_output,
+    file_name="student_improvement_analysis.csv",
+    mime="text/csv"
 )
-
-# ------------------------------------------------------------
-
-# FOOTER
-
-# ------------------------------------------------------------
 
 st.markdown("---")
 
 st.caption(
-"📊 Student Improvement Analysis Dashboard"
+    "📊 Student Improvement Analysis Dashboard"
 )
