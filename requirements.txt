@@ -1,4 +1,4 @@
 streamlit
 pandas
 numpy
-plotly>=5.18
+plotly
