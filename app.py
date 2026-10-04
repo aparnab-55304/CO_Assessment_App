@@ -2,11 +2,9 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go
-
 
 # ============================================================
-# PAGE CONFIGURATION
+# PAGE SETTINGS
 # ============================================================
 
 st.set_page_config(
@@ -15,22 +13,14 @@ st.set_page_config(
     layout="wide"
 )
 
-
-# ============================================================
-# TITLE
-# ============================================================
-
 st.title("📊 Student Performance Dashboard")
-st.header("📈 Student Improvement & Assessment Analysis")
-
 st.write(
-    "Upload the assessment CSV file to analyse student performance, "
-    "scores, improvement, duration, question-wise performance and outliers."
+    "Upload the assessment CSV file to analyse student scores, improvement, "
+    "attempts, time efficiency, and Apple vs Orange team performance."
 )
 
-
 # ============================================================
-# SIDEBAR
+# FILE UPLOAD
 # ============================================================
 
 st.sidebar.header("📂 Upload CSV")
@@ -40,11 +30,9 @@ uploaded_file = st.sidebar.file_uploader(
     type=["csv"]
 )
 
-
 if uploaded_file is None:
     st.info("Please upload your CSV file from the sidebar.")
     st.stop()
-
 
 # ============================================================
 # READ CSV
@@ -53,25 +41,20 @@ if uploaded_file is None:
 df_original = pd.read_csv(uploaded_file)
 
 df_original.columns = (
-    df_original.columns
-    .astype(str)
+    df_original.columns.astype(str)
     .str.strip()
 )
 
-
 st.success("✅ CSV uploaded successfully.")
 
+# Keep an untouched copy for displaying original data.
+df = df_original.copy()
 
 # ============================================================
-# ORIGINAL DATA
+# SHOW ORIGINAL DATA
 # ============================================================
 
-st.subheader("📋 Complete Uploaded CSV Data")
-
-st.caption(
-    f"Original dataset: {len(df_original)} rows × "
-    f"{len(df_original.columns)} columns"
-)
+st.subheader("📋 Uploaded Data")
 
 st.dataframe(
     df_original,
@@ -79,9 +62,8 @@ st.dataframe(
     hide_index=True
 )
 
-
 # ============================================================
-# SCORE COLUMN
+# FIND SCORE COLUMN
 # ============================================================
 
 possible_score_columns = [
@@ -93,52 +75,34 @@ possible_score_columns = [
     "Final Score"
 ]
 
-
-numeric_columns = df_original.select_dtypes(
-    include="number"
-).columns.tolist()
-
+numeric_columns = (
+    df.select_dtypes(include="number")
+    .columns
+    .tolist()
+)
 
 score_column = next(
     (
         column
         for column in possible_score_columns
-        if column in df_original.columns
+        if column in df.columns
     ),
     numeric_columns[0] if numeric_columns else None
 )
 
-
 if score_column is None:
-
     st.error("❌ No score column was found.")
-
-    st.write(
-        "Available columns:",
-        list(df_original.columns)
-    )
-
+    st.write("Available columns:", list(df.columns))
     st.stop()
-
-
-# ============================================================
-# WORKING COPY
-# ============================================================
-
-df = df_original.copy()
-
 
 df[score_column] = pd.to_numeric(
     df[score_column],
     errors="coerce"
 )
 
-
-# Remove rows where score is missing
 df = df.dropna(
     subset=[score_column]
 ).copy()
-
 
 # ============================================================
 # STUDENT NAME
@@ -159,113 +123,69 @@ email = df.get(
     pd.Series("", index=df.index)
 )
 
-
 df["Student Name"] = (
     first_name.fillna("").astype(str).str.strip()
     + " "
     + last_name.fillna("").astype(str).str.strip()
 ).str.strip()
 
-
 df["Student Name"] = df["Student Name"].where(
     df["Student Name"].ne(""),
     email.fillna("").astype(str).str.strip()
 )
 
-
 # ============================================================
-# OUTLIER DETECTION USING IQR
-# ============================================================
-
-Q1 = df[score_column].quantile(0.25)
-
-Q3 = df[score_column].quantile(0.75)
-
-IQR = Q3 - Q1
-
-lower_bound = Q1 - 1.5 * IQR
-
-upper_bound = Q3 + 1.5 * IQR
-
-
-df["Outlier"] = (
-    (df[score_column] < lower_bound)
-    |
-    (df[score_column] > upper_bound)
-)
-
-
-outliers = df[
-    df["Outlier"]
-].copy()
-
-
-clean_df = df[
-    ~df["Outlier"]
-].copy()
-
-
-# ============================================================
-# OUTLIER SUMMARY
+# CLEAN STUDENT NAME FOR TEAM MATCHING
 # ============================================================
 
-st.subheader("🚨 Outlier Detection")
-
-o1, o2, o3, o4 = st.columns(4)
-
-o1.metric(
-    "Q1",
-    f"{Q1:.2f}"
-)
-
-o2.metric(
-    "Q3",
-    f"{Q3:.2f}"
-)
-
-o3.metric(
-    "IQR",
-    f"{IQR:.2f}"
-)
-
-o4.metric(
-    "Outliers Removed",
-    len(outliers)
-)
-
-
-st.info(
-    f"IQR lower limit = {lower_bound:.2f} | "
-    f"IQR upper limit = {upper_bound:.2f}"
-)
-
-
-if len(outliers) > 0:
-
-    st.warning(
-        f"⚠️ {len(outliers)} observation(s) were identified "
-        f"as score outliers."
+def normalize_name(name):
+    return (
+        str(name)
+        .lower()
+        .replace(" ", "")
+        .replace(".", "")
+        .replace(",", "")
+        .replace("-", "")
+        .replace("_", "")
     )
 
-    st.dataframe(
-        outliers,
-        use_container_width=True,
-        hide_index=True
-    )
-
-else:
-
-    st.success(
-        "✅ No score outliers were detected using the IQR method."
-    )
-
+df["Name Key"] = df["Student Name"].apply(normalize_name)
 
 # ============================================================
-# USE CLEAN DATA FOR ANALYSIS
+# APPLE / ORANGE TEAM ASSIGNMENT
 # ============================================================
 
-df = clean_df.copy()
+# Your team assignment
+apple_members = [
+    "Aparna",
+    "Jayalakshmi",
+    "Ganga",
+    "Jintu"
+]
 
+orange_members = [
+    "Sreelakshmi",
+    "Aiswarya",
+    "Nandana"
+]
+
+apple_keys = [normalize_name(x) for x in apple_members]
+orange_keys = [normalize_name(x) for x in orange_members]
+
+def assign_team(name_key):
+    # Exact or partial matching makes the mapping robust
+    # to names such as "SreelakshmiAnilkumar".
+    for member in apple_keys:
+        if member in name_key or name_key in member:
+            return "Apple"
+
+    for member in orange_keys:
+        if member in name_key or name_key in member:
+            return "Orange"
+
+    return "Unassigned"
+
+df["Team"] = df["Name Key"].apply(assign_team)
 
 # ============================================================
 # BASIC STATISTICS
@@ -273,7 +193,7 @@ df = clean_df.copy()
 
 max_score = 15.0
 
-student_count = len(df)
+student_count = df["Student Name"].nunique()
 
 average_score = df[score_column].mean()
 
@@ -285,12 +205,11 @@ median_score = df[score_column].median()
 
 std_score = df[score_column].std()
 
-cv = (
-    std_score / average_score * 100
+cv_score = (
+    (std_score / average_score) * 100
     if average_score != 0
     else np.nan
 )
-
 
 # ============================================================
 # PERCENTAGE
@@ -300,28 +219,36 @@ df["Percentage"] = (
     df[score_column] / max_score
 ) * 100
 
-
-df["Percentage"] = df["Percentage"].clip(
-    0,
-    100
-)
-
+df["Percentage"] = df["Percentage"].clip(0, 100)
 
 # ============================================================
-# IMPROVEMENT
+# IQR OUTLIER DETECTION
 # ============================================================
 
-df["Improvement"] = (
-    df[score_column] - average_score
+Q1 = df[score_column].quantile(0.25)
+Q3 = df[score_column].quantile(0.75)
+
+IQR = Q3 - Q1
+
+lower_bound = Q1 - 1.5 * IQR
+upper_bound = Q3 + 1.5 * IQR
+
+df["Outlier"] = (
+    (df[score_column] < lower_bound)
+    | (df[score_column] > upper_bound)
 )
 
+outliers = df[df["Outlier"]].copy()
+
+# Clean data is used for statistical analysis.
+clean_df = df[~df["Outlier"]].copy()
 
 # ============================================================
 # PERFORMANCE CATEGORY
 # ============================================================
 
-df["Performance"] = pd.cut(
-    df["Percentage"],
+clean_df["Performance"] = pd.cut(
+    clean_df["Percentage"],
     bins=[-1, 40, 60, 80, 101],
     labels=[
         "Needs Improvement",
@@ -332,13 +259,18 @@ df["Performance"] = pd.cut(
     right=False
 )
 
-
 # ============================================================
-# IMPROVEMENT STATUS
+# CLASS AVERAGE AND RELATIVE PERFORMANCE
 # ============================================================
 
-df["Improvement Status"] = pd.cut(
-    df["Improvement"],
+clean_average = clean_df[score_column].mean()
+
+clean_df["Difference from Class Average"] = (
+    clean_df[score_column] - clean_average
+)
+
+clean_df["Improvement Status"] = pd.cut(
+    clean_df["Difference from Class Average"],
     bins=[
         float("-inf"),
         -0.000001,
@@ -352,12 +284,180 @@ df["Improvement Status"] = pd.cut(
     ]
 )
 
+# ============================================================
+# DURATION CONVERSION
+# ============================================================
+
+def duration_to_minutes(value):
+    """
+    Convert common Duration formats to minutes.
+    Supports:
+    - numeric minutes
+    - seconds as numeric values
+    - HH:MM:SS
+    - MM:SS
+    - text containing a number
+    """
+    if pd.isna(value):
+        return np.nan
+
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        return float(value)
+
+    text = str(value).strip()
+
+    if text == "" or text.lower() in [
+        "nan",
+        "none",
+        "not available"
+    ]:
+        return np.nan
+
+    # Time format HH:MM:SS
+    parts = text.split(":")
+
+    try:
+        if len(parts) == 3:
+            h, m, s = map(float, parts)
+            return h * 60 + m + s / 60
+
+        if len(parts) == 2:
+            m, s = map(float, parts)
+            return m + s / 60
+
+        return float(text)
+    except ValueError:
+        return np.nan
+
+
+if "Duration" in df.columns:
+    df["Time (minutes)"] = df["Duration"].apply(
+        duration_to_minutes
+    )
+else:
+    df["Time (minutes)"] = np.nan
+
+clean_df["Time (minutes)"] = df.loc[
+    clean_df.index,
+    "Time (minutes)"
+]
+
+# ============================================================
+# ATTEMPT NUMBER
+# ============================================================
+
+# One CSV row = one assessment attempt.
+df["Attempt Number"] = (
+    df.groupby("Student Name")
+    .cumcount()
+    + 1
+)
+
+clean_df["Attempt Number"] = df.loc[
+    clean_df.index,
+    "Attempt Number"
+]
+
+# ============================================================
+# TRUE IMPROVEMENT: FIRST ATTEMPT TO LATEST ATTEMPT
+# ============================================================
+
+# Use original rows so that an outlier does not change
+# the student's actual attempt history.
+
+df_ordered = df.copy()
+
+if "Started" in df_ordered.columns:
+    df_ordered["_Started_dt"] = pd.to_datetime(
+        df_ordered["Started"],
+        errors="coerce"
+    )
+
+    if df_ordered["_Started_dt"].notna().any():
+        df_ordered = df_ordered.sort_values(
+            ["Student Name", "_Started_dt"]
+        )
+
+else:
+    df_ordered = df_ordered.sort_index()
+
+first_attempt = (
+    df_ordered
+    .groupby("Student Name", sort=False)[score_column]
+    .first()
+)
+
+latest_attempt = (
+    df_ordered
+    .groupby("Student Name", sort=False)[score_column]
+    .last()
+)
+
+attempt_counts = (
+    df_ordered
+    .groupby("Student Name")
+    .size()
+)
+
+student_summary = pd.DataFrame({
+    "Student Name": first_attempt.index,
+    "First Attempt Score": first_attempt.values,
+    "Latest Attempt Score": latest_attempt.values,
+    "Assessment Attempts": attempt_counts.values
+})
+
+student_summary["True Improvement"] = (
+    student_summary["Latest Attempt Score"]
+    - student_summary["First Attempt Score"]
+)
+
+student_summary["Improvement %"] = np.where(
+    student_summary["First Attempt Score"] != 0,
+    (
+        student_summary["True Improvement"]
+        / student_summary["First Attempt Score"]
+    ) * 100,
+    np.nan
+)
+
+student_summary["Team"] = (
+    student_summary["Student Name"]
+    .apply(normalize_name)
+    .apply(assign_team)
+)
+
+# ============================================================
+# QUESTION-WISE ATTEMPT COUNTS
+# ============================================================
+
+question_columns = [
+    column
+    for column in df.columns
+    if str(column).upper().startswith("Q")
+]
+
+question_results = []
+
+for question in question_columns:
+    values = pd.to_numeric(
+        df[question],
+        errors="coerce"
+    )
+
+    question_results.append({
+        "Question": question,
+        "Average": values.mean(),
+        "Attempted": values.notna().sum(),
+        "Not Attempted": values.isna().sum()
+    })
+
+question_summary = pd.DataFrame(question_results)
 
 # ============================================================
 # MAIN METRICS
 # ============================================================
 
-st.subheader("📌 Overall Performance After Outlier Removal")
+st.subheader("📌 Overall Performance")
 
 col1, col2, col3, col4, col5, col6 = st.columns(6)
 
@@ -367,18 +467,18 @@ col1.metric(
 )
 
 col2.metric(
-    "📊 Class Average",
+    "📊 Average",
     f"{average_score:.2f}/15"
 )
 
 col3.metric(
     "🏆 Highest",
-    f"{highest_score:.2f}"
+    f"{highest_score:.2f}/15"
 )
 
 col4.metric(
     "📉 Lowest",
-    f"{lowest_score:.2f}"
+    f"{lowest_score:.2f}/15"
 )
 
 col5.metric(
@@ -387,17 +487,54 @@ col5.metric(
 )
 
 col6.metric(
-    "📐 CV",
-    f"{cv:.2f}%"
+    "🔄 Total Attempts",
+    len(df)
 )
 
+# ============================================================
+# OUTLIER INFORMATION
+# ============================================================
+
+st.subheader("🔍 Outlier Analysis")
+
+outlier_col1, outlier_col2, outlier_col3, outlier_col4 = st.columns(4)
+
+outlier_col1.metric("Q1", f"{Q1:.2f}")
+outlier_col2.metric("Q3", f"{Q3:.2f}")
+outlier_col3.metric("IQR", f"{IQR:.2f}")
+outlier_col4.metric("Outliers", len(outliers))
+
+st.caption(
+    "IQR rule: values below Q1 − 1.5×IQR or above Q3 + 1.5×IQR "
+    "are treated as outliers. Outliers are excluded from the cleaned "
+    "statistical analysis but are not deleted from the original data."
+)
+
+if len(outliers) > 0:
+    st.dataframe(
+        outliers[
+            [
+                "Student Name",
+                score_column,
+                "Percentage",
+                "Team"
+            ]
+        ].sort_values(
+            score_column,
+            ascending=False
+        ),
+        use_container_width=True,
+        hide_index=True
+    )
+else:
+    st.success("✅ No score outliers were detected.")
 
 # ============================================================
-# PERFORMANCE COUNTS
+# PERFORMANCE CATEGORIES
 # ============================================================
 
 performance_counts = (
-    df["Performance"]
+    clean_df["Performance"]
     .value_counts()
     .reindex(
         [
@@ -409,7 +546,6 @@ performance_counts = (
         fill_value=0
     )
 )
-
 
 st.subheader("📊 Performance Categories")
 
@@ -435,670 +571,904 @@ c4.metric(
     int(performance_counts["Needs Improvement"])
 )
 
-
 # ============================================================
-# 1. STUDENT SCORE COMPARISON
+# ACHIEVEMENT / WINNER SECTION
 # ============================================================
 
-st.subheader("📈 Student Score Comparison")
+st.subheader("🏆 Student Achievement Highlights")
 
-score_chart = (
-    df[
-        ["Student Name", score_column]
-    ]
-    .sort_values(
-        score_column,
-        ascending=False
-    )
+# ---------- Highest score ----------
+
+highest_rows = clean_df[
+    clean_df[score_column] == clean_df[score_column].max()
+].copy()
+
+highest_names = ", ".join(
+    highest_rows["Student Name"].astype(str)
 )
 
+# ---------- Most improvement ----------
+
+improved_rows = student_summary[
+    student_summary["True Improvement"]
+    == student_summary["True Improvement"].max()
+].copy()
+
+most_improved_names = ", ".join(
+    improved_rows["Student Name"].astype(str)
+)
+
+# ---------- Maximum attempts ----------
+
+max_attempts = student_summary["Assessment Attempts"].max()
+
+max_attempt_rows = student_summary[
+    student_summary["Assessment Attempts"]
+    == max_attempts
+].copy()
+
+max_attempt_names = ", ".join(
+    max_attempt_rows["Student Name"].astype(str)
+)
+
+# ---------- Highest score with least time ----------
+
+score_time_df = clean_df.dropna(
+    subset=["Time (minutes)"]
+).copy()
+
+if len(score_time_df) > 0:
+    highest_clean_score = score_time_df[score_column].max()
+
+    high_score_fast_rows = score_time_df[
+        score_time_df[score_column]
+        == highest_clean_score
+    ].sort_values(
+        "Time (minutes)",
+        ascending=True
+    )
+
+    fastest_high_score = high_score_fast_rows.iloc[0]
+
+    fastest_high_score_name = fastest_high_score["Student Name"]
+    fastest_high_score_value = fastest_high_score[score_column]
+    fastest_high_score_time = fastest_high_score["Time (minutes)"]
+
+else:
+    fastest_high_score_name = "Duration not available"
+    fastest_high_score_value = np.nan
+    fastest_high_score_time = np.nan
+
+# ---------- Best score per minute ----------
+
+efficiency_df = clean_df.dropna(
+    subset=["Time (minutes)"]
+).copy()
+
+efficiency_df = efficiency_df[
+    efficiency_df["Time (minutes)"] > 0
+].copy()
+
+if len(efficiency_df) > 0:
+    efficiency_df["Score per Minute"] = (
+        efficiency_df[score_column]
+        / efficiency_df["Time (minutes)"]
+    )
+
+    best_efficiency_row = efficiency_df.loc[
+        efficiency_df["Score per Minute"].idxmax()
+    ]
+
+    best_efficiency_name = best_efficiency_row["Student Name"]
+    best_efficiency_score = best_efficiency_row[score_column]
+    best_efficiency_time = best_efficiency_row["Time (minutes)"]
+    best_efficiency_value = best_efficiency_row["Score per Minute"]
+
+else:
+    best_efficiency_name = "Duration not available"
+    best_efficiency_score = np.nan
+    best_efficiency_time = np.nan
+    best_efficiency_value = np.nan
+
+a1, a2, a3 = st.columns(3)
+
+a1.metric(
+    "🏆 Highest Score",
+    f"{highest_score:.2f}/15"
+)
+st.write(f"**Student:** {highest_names}")
+
+a2.metric(
+    "📈 Most Improvement",
+    f"{student_summary['True Improvement'].max():.2f} marks"
+)
+st.write(f"**Student:** {most_improved_names}")
+
+a3.metric(
+    "🔄 Maximum Attempts",
+    int(max_attempts)
+)
+st.write(f"**Student:** {max_attempt_names}")
+
+b1, b2 = st.columns(2)
+
+with b1:
+    st.markdown("### ⚡ Highest Score in Least Time")
+
+    if not pd.isna(fastest_high_score_time):
+        st.write(
+            f"**Student:** {fastest_high_score_name}"
+        )
+        st.write(
+            f"**Score:** {fastest_high_score_value:.2f}/15"
+        )
+        st.write(
+            f"**Time:** {fastest_high_score_time:.2f} minutes"
+        )
+    else:
+        st.info("Duration information is not available.")
+
+with b2:
+    st.markdown("### 🎯 Best Score-Time Efficiency")
+
+    if not pd.isna(best_efficiency_value):
+        st.write(
+            f"**Student:** {best_efficiency_name}"
+        )
+        st.write(
+            f"**Score:** {best_efficiency_score:.2f}/15"
+        )
+        st.write(
+            f"**Time:** {best_efficiency_time:.2f} minutes"
+        )
+        st.write(
+            f"**Score per minute:** {best_efficiency_value:.3f}"
+        )
+    else:
+        st.info("Duration information is not available.")
+
+# ============================================================
+# TRUE IMPROVEMENT TABLE
+# ============================================================
+
+st.subheader("📈 True Student Improvement")
+
+improvement_display = student_summary.copy()
+
+improvement_display["First Attempt Score"] = (
+    improvement_display["First Attempt Score"].round(2)
+)
+
+improvement_display["Latest Attempt Score"] = (
+    improvement_display["Latest Attempt Score"].round(2)
+)
+
+improvement_display["True Improvement"] = (
+    improvement_display["True Improvement"].round(2)
+)
+
+improvement_display["Improvement %"] = (
+    improvement_display["Improvement %"].round(2)
+)
+
+improvement_display = improvement_display.sort_values(
+    "True Improvement",
+    ascending=False
+)
+
+st.dataframe(
+    improvement_display[
+        [
+            "Student Name",
+            "Team",
+            "First Attempt Score",
+            "Latest Attempt Score",
+            "True Improvement",
+            "Improvement %",
+            "Assessment Attempts"
+        ]
+    ],
+    use_container_width=True,
+    hide_index=True
+)
+
+# ============================================================
+# SCORE CHART
+# ============================================================
+
+st.subheader("📊 Student Score Comparison")
+
+score_chart_df = clean_df[
+    [
+        "Student Name",
+        score_column,
+        "Team"
+    ]
+].sort_values(
+    score_column,
+    ascending=False
+)
 
 fig_score = px.bar(
-    score_chart,
+    score_chart_df,
     x="Student Name",
     y=score_column,
+    color="Team",
+    text=score_column,
     title="Student Score Comparison",
     labels={
         "Student Name": "Student",
         score_column: "Score"
-    },
-    text=score_column
+    }
 )
-
 
 fig_score.update_traces(
     texttemplate="%{text:.2f}",
-    textposition="outside",
-    hovertemplate=(
-        "<b>%{x}</b><br>"
-        "Score: %{y:.2f}/15"
-        "<extra></extra>"
-    )
+    textposition="outside"
 )
-
 
 fig_score.update_layout(
-    xaxis_title="Student",
-    yaxis_title="Score",
     xaxis_tickangle=-45,
-    height=600,
-    showlegend=False
+    yaxis_title="Score out of 15",
+    xaxis_title="Student",
+    height=550
 )
-
-
-fig_score.update_yaxes(
-    range=[
-        0,
-        max(15, highest_score + 1)
-    ]
-)
-
 
 st.plotly_chart(
     fig_score,
     use_container_width=True
 )
 
-
 # ============================================================
-# 2. PERCENTAGE CHART
-# ============================================================
-
-st.subheader("📊 Student Percentage")
-
-percentage_chart = (
-    df[
-        ["Student Name", "Percentage"]
-    ]
-    .sort_values(
-        "Percentage",
-        ascending=False
-    )
-)
-
-
-fig_percentage = px.bar(
-    percentage_chart,
-    x="Student Name",
-    y="Percentage",
-    title="Student Percentage Comparison",
-    labels={
-        "Student Name": "Student",
-        "Percentage": "Percentage (%)"
-    },
-    text="Percentage"
-)
-
-
-fig_percentage.update_traces(
-    texttemplate="%{text:.1f}%",
-    textposition="outside",
-    hovertemplate=(
-        "<b>%{x}</b><br>"
-        "Percentage: %{y:.2f}%"
-        "<extra></extra>"
-    )
-)
-
-
-fig_percentage.update_layout(
-    xaxis_title="Student",
-    yaxis_title="Percentage (%)",
-    xaxis_tickangle=-45,
-    height=600,
-    showlegend=False
-)
-
-
-fig_percentage.update_yaxes(
-    range=[0, 105]
-)
-
-
-st.plotly_chart(
-    fig_percentage,
-    use_container_width=True
-)
-
-
-# ============================================================
-# 3. IMPROVEMENT CHART
+# TRUE IMPROVEMENT CHART
 # ============================================================
 
-st.subheader(
-    "📈 Improvement Relative to Class Average"
-)
-
-
-improvement_chart = (
-    df[
-        ["Student Name", "Improvement"]
-    ]
-    .sort_values(
-        "Improvement",
-        ascending=False
-    )
-)
-
+st.subheader("📈 Student Improvement: First Attempt → Latest Attempt")
 
 fig_improvement = px.bar(
-    improvement_chart,
+    improvement_display,
     x="Student Name",
-    y="Improvement",
-    title="Student Improvement Relative to Class Average",
+    y="True Improvement",
+    color="Team",
+    text="True Improvement",
+    title="Improvement from First Attempt to Latest Attempt",
     labels={
         "Student Name": "Student",
-        "Improvement": "Difference from Class Average"
-    },
-    text="Improvement"
+        "True Improvement": "Improvement in Marks"
+    }
 )
-
 
 fig_improvement.update_traces(
     texttemplate="%{text:.2f}",
-    textposition="outside",
-    hovertemplate=(
-        "<b>%{x}</b><br>"
-        "Difference: %{y:.2f}<br>"
-        "<extra></extra>"
-    )
+    textposition="outside"
 )
-
-
-fig_improvement.add_hline(
-    y=0,
-    line_width=2,
-    line_dash="dash"
-)
-
 
 fig_improvement.update_layout(
-    xaxis_title="Student",
-    yaxis_title="Score Difference from Class Average",
     xaxis_tickangle=-45,
-    height=600,
-    showlegend=False
+    xaxis_title="Student",
+    yaxis_title="Improvement in Marks",
+    height=550
 )
-
 
 st.plotly_chart(
     fig_improvement,
     use_container_width=True
 )
 
-
 # ============================================================
-# 4. SCORE DISTRIBUTION
-# ============================================================
-
-st.subheader("📊 Score Distribution")
-
-
-fig_distribution = px.histogram(
-    df,
-    x=score_column,
-    nbins=10,
-    title="Distribution of Student Scores",
-    labels={
-        score_column: "Score",
-        "count": "Number of Students"
-    },
-    text_auto=True
-)
-
-
-fig_distribution.update_layout(
-    xaxis_title="Score",
-    yaxis_title="Number of Students",
-    height=500,
-    showlegend=False
-)
-
-
-st.plotly_chart(
-    fig_distribution,
-    use_container_width=True
-)
-
-
-# ============================================================
-# 5. BOX PLOT
+# SCORE VS TIME
 # ============================================================
 
-st.subheader("📦 Score Box Plot")
+st.subheader("⏱️ Score vs Time")
 
+if len(efficiency_df) > 0:
 
-fig_box = px.box(
-    df,
-    y=score_column,
-    points="all",
-    title="Score Distribution and Remaining Observations",
-    labels={
-        score_column: "Score"
-    }
-)
-
-
-fig_box.update_layout(
-    yaxis_title="Score",
-    height=500,
-    showlegend=False
-)
-
-
-st.plotly_chart(
-    fig_box,
-    use_container_width=True
-)
-
-
-# ============================================================
-# 6. TOP STUDENTS
-# ============================================================
-
-st.subheader("🏆 Top Performing Students")
-
-
-top_students = df.nlargest(
-    min(5, len(df)),
-    score_column
-)[
-    [
-        "Student Name",
-        score_column,
-        "Percentage",
-        "Performance"
-    ]
-].copy()
-
-
-top_students["Percentage"] = (
-    top_students["Percentage"]
-    .round(2)
-)
-
-
-st.dataframe(
-    top_students,
-    use_container_width=True,
-    hide_index=True
-)
-
-
-# ============================================================
-# 7. BELOW AVERAGE STUDENTS
-# ============================================================
-
-st.subheader(
-    "⚠️ Students Below Class Average"
-)
-
-
-below_average = df[
-    df[score_column] < average_score
-][
-    [
-        "Student Name",
-        score_column,
-        "Percentage",
-        "Improvement"
-    ]
-].copy()
-
-
-below_average["Percentage"] = (
-    below_average["Percentage"]
-    .round(2)
-)
-
-
-below_average["Improvement"] = (
-    below_average["Improvement"]
-    .round(2)
-)
-
-
-st.dataframe(
-    below_average,
-    use_container_width=True,
-    hide_index=True
-)
-
-
-# ============================================================
-# 8. DURATION ANALYSIS
-# ============================================================
-
-if "Duration" in df.columns:
-
-    st.subheader("⏱️ Assessment Duration")
-
-    duration_df = df[
-        [
+    fig_scatter = px.scatter(
+        efficiency_df,
+        x="Time (minutes)",
+        y=score_column,
+        color="Team",
+        text="Student Name",
+        size="Percentage",
+        hover_data=[
             "Student Name",
-            "Duration"
-        ]
-    ].copy()
-
-    st.dataframe(
-        duration_df,
-        use_container_width=True,
-        hide_index=True
-    )
-
-
-# ============================================================
-# 9. SCORE VS DURATION
-# ============================================================
-
-if "Duration" in df.columns:
-
-    duration_numeric = pd.to_numeric(
-        df["Duration"],
-        errors="coerce"
-    )
-
-    if duration_numeric.notna().sum() > 1:
-
-        chart_duration = df.copy()
-
-        chart_duration["Duration Numeric"] = (
-            duration_numeric
-        )
-
-        chart_duration = chart_duration.dropna(
-            subset=["Duration Numeric"]
-        )
-
-        st.subheader(
-            "⏱️ Score vs Assessment Duration"
-        )
-
-        fig_duration = px.scatter(
-            chart_duration,
-            x="Duration Numeric",
-            y=score_column,
-            hover_name="Student Name",
-            title="Relationship Between Assessment Duration and Score",
-            labels={
-                "Duration Numeric": "Assessment Duration",
-                score_column: "Score"
-            },
-            text="Student Name"
-        )
-
-        fig_duration.update_traces(
-            marker=dict(size=12),
-            hovertemplate=(
-                "<b>%{hovertext}</b><br>"
-                "Duration: %{x}<br>"
-                "Score: %{y:.2f}<br>"
-                "<extra></extra>"
-            )
-        )
-
-        fig_duration.update_layout(
-            xaxis_title="Assessment Duration",
-            yaxis_title="Score",
-            height=600
-        )
-
-        st.plotly_chart(
-            fig_duration,
-            use_container_width=True
-        )
-
-
-# ============================================================
-# 10. STATUS ANALYSIS
-# ============================================================
-
-if "Status" in df.columns:
-
-    st.subheader("📌 Student Status")
-
-    status_counts = (
-        df["Status"]
-        .fillna("Unknown")
-        .astype(str)
-        .value_counts()
-        .reset_index()
-    )
-
-    status_counts.columns = [
-        "Status",
-        "Students"
-    ]
-
-    fig_status = px.bar(
-        status_counts,
-        x="Status",
-        y="Students",
-        title="Student Status Distribution",
+            "Team",
+            score_column,
+            "Percentage",
+            "Time (minutes)"
+        ],
+        title="Score vs Assessment Time",
         labels={
-            "Status": "Student Status",
-            "Students": "Number of Students"
-        },
-        text="Students"
+            "Time (minutes)": "Time (minutes)",
+            score_column: "Score"
+        }
     )
 
-    fig_status.update_traces(
-        textposition="outside"
+    fig_scatter.update_traces(
+        textposition="top center"
     )
 
-    fig_status.update_layout(
-        xaxis_title="Student Status",
-        yaxis_title="Number of Students",
-        height=500,
-        showlegend=False
+    fig_scatter.update_layout(
+        xaxis_title="Assessment Time (minutes)",
+        yaxis_title="Score out of 15",
+        height=550
     )
 
     st.plotly_chart(
-        fig_status,
+        fig_scatter,
         use_container_width=True
     )
 
+else:
+    st.info("Duration information is not available for the score-time chart.")
 
 # ============================================================
-# 11. QUESTION-WISE ANALYSIS
+# ATTEMPT COUNT CHART
 # ============================================================
 
-question_columns = [
-    column
-    for column in df.columns
-    if str(column).upper().startswith("Q")
-]
+st.subheader("🔄 Assessment Attempts by Student")
 
+attempt_chart = student_summary.sort_values(
+    "Assessment Attempts",
+    ascending=False
+)
 
-if question_columns:
+fig_attempts = px.bar(
+    attempt_chart,
+    x="Student Name",
+    y="Assessment Attempts",
+    color="Team",
+    text="Assessment Attempts",
+    title="Number of Assessment Attempts",
+    labels={
+        "Student Name": "Student",
+        "Assessment Attempts": "Number of Attempts"
+    }
+)
 
-    st.subheader("📝 Question-wise Analysis")
+fig_attempts.update_traces(
+    textposition="outside"
+)
 
+fig_attempts.update_layout(
+    xaxis_tickangle=-45,
+    xaxis_title="Student",
+    yaxis_title="Number of Attempts",
+    height=550
+)
 
-    question_results = []
+st.plotly_chart(
+    fig_attempts,
+    use_container_width=True
+)
 
+# ============================================================
+# DURATION TABLE
+# ============================================================
 
-    for question in question_columns:
+st.subheader("⏱️ Student Duration and Efficiency")
 
-        values = pd.to_numeric(
-            df[question],
-            errors="coerce"
-        )
+duration_display = clean_df[
+    [
+        "Student Name",
+        "Team",
+        score_column,
+        "Percentage",
+        "Time (minutes)"
+    ]
+].copy()
 
-        question_results.append(
-            {
-                "Question": question,
-                "Average": values.mean(),
-                "Attempted": values.notna().sum(),
-                "Not Attempted": values.isna().sum()
-            }
-        )
+duration_display["Score per Minute"] = np.where(
+    duration_display["Time (minutes)"] > 0,
+    duration_display[score_column]
+    / duration_display["Time (minutes)"],
+    np.nan
+)
 
+duration_display = duration_display.sort_values(
+    "Score per Minute",
+    ascending=False
+)
 
-    question_summary = pd.DataFrame(
-        question_results
+duration_display["Percentage"] = (
+    duration_display["Percentage"].round(2)
+)
+
+duration_display[score_column] = (
+    duration_display[score_column].round(2)
+)
+
+duration_display["Time (minutes)"] = (
+    duration_display["Time (minutes)"].round(2)
+)
+
+duration_display["Score per Minute"] = (
+    duration_display["Score per Minute"].round(3)
+)
+
+st.dataframe(
+    duration_display,
+    use_container_width=True,
+    hide_index=True
+)
+
+# ============================================================
+# APPLE VS ORANGE TEAM COMPARISON
+# ============================================================
+
+st.subheader("🍎 Apple vs 🟠 Orange — Complete Team Comparison")
+
+team_df = clean_df[
+    clean_df["Team"].isin(["Apple", "Orange"])
+].copy()
+
+team_summary_rows = []
+
+for team in ["Apple", "Orange"]:
+
+    team_clean = clean_df[
+        clean_df["Team"] == team
+    ].copy()
+
+    team_original = df[
+        df["Team"] == team
+    ].copy()
+
+    team_students = student_summary[
+        student_summary["Team"] == team
+    ].copy()
+
+    team_summary_rows.append({
+        "Team": team,
+        "Students": team_students["Student Name"].nunique(),
+        "Assessment Attempts": len(team_original),
+        "Average Score": team_clean[score_column].mean(),
+        "Highest Score": team_clean[score_column].max(),
+        "Lowest Score": team_clean[score_column].min(),
+        "Average Percentage": team_clean["Percentage"].mean(),
+        "Average Time (min)": team_clean["Time (minutes)"].mean(),
+        "Average Attempts / Student": team_students[
+            "Assessment Attempts"
+        ].mean(),
+        "Total Improvement": team_students[
+            "True Improvement"
+        ].sum(),
+        "Average Improvement": team_students[
+            "True Improvement"
+        ].mean()
+    })
+
+team_summary = pd.DataFrame(
+    team_summary_rows
+)
+
+team_summary_display = team_summary.copy()
+
+for column in [
+    "Average Score",
+    "Highest Score",
+    "Lowest Score",
+    "Average Percentage",
+    "Average Time (min)",
+    "Average Attempts / Student",
+    "Total Improvement",
+    "Average Improvement"
+]:
+    team_summary_display[column] = (
+        team_summary_display[column].round(2)
     )
 
+st.dataframe(
+    team_summary_display,
+    use_container_width=True,
+    hide_index=True
+)
 
-    question_summary["Average"] = (
-        question_summary["Average"]
-        .round(2)
+# ============================================================
+# TEAM WINNER: MORE SCORE + LESS TIME
+# ============================================================
+
+st.markdown("### 🏆 Which Team Scores More in Less Time?")
+
+valid_team_summary = team_summary.dropna(
+    subset=[
+        "Average Score",
+        "Average Time (min)"
+    ]
+).copy()
+
+if len(valid_team_summary) == 2:
+
+    higher_score_team = valid_team_summary.loc[
+        valid_team_summary["Average Score"].idxmax(),
+        "Team"
+    ]
+
+    lower_time_team = valid_team_summary.loc[
+        valid_team_summary["Average Time (min)"].idxmin(),
+        "Team"
+    ]
+
+    if higher_score_team == lower_time_team:
+
+        st.success(
+            f"🏆 **{higher_score_team} is the stronger score-time team**: "
+            f"it has the higher average score and the lower average time."
+        )
+
+    else:
+
+        score_team = higher_score_team
+        time_team = lower_time_team
+
+        st.warning(
+            f"📊 The results are mixed: **{score_team}** has the higher "
+            f"average score, while **{time_team}** has the lower average time."
+        )
+
+        st.write(
+            "Therefore, there is no single winner based on both criteria."
+        )
+
+else:
+    st.info(
+        "Both teams need usable score and duration data for this comparison."
     )
 
+# ============================================================
+# TEAM AVERAGE SCORE CHART
+# ============================================================
+
+st.subheader("🍎🟠 Average Score: Apple vs Orange")
+
+fig_team_score = px.bar(
+    team_summary,
+    x="Team",
+    y="Average Score",
+    color="Team",
+    text="Average Score",
+    title="Average Score by Team",
+    labels={
+        "Team": "Team",
+        "Average Score": "Average Score"
+    }
+)
+
+fig_team_score.update_traces(
+    texttemplate="%{text:.2f}",
+    textposition="outside"
+)
+
+fig_team_score.update_layout(
+    xaxis_title="Team",
+    yaxis_title="Average Score out of 15",
+    height=450
+)
+
+st.plotly_chart(
+    fig_team_score,
+    use_container_width=True
+)
+
+# ============================================================
+# TEAM TIME CHART
+# ============================================================
+
+st.subheader("⏱️ Average Time: Apple vs Orange")
+
+fig_team_time = px.bar(
+    team_summary,
+    x="Team",
+    y="Average Time (min)",
+    color="Team",
+    text="Average Time (min)",
+    title="Average Assessment Time by Team",
+    labels={
+        "Team": "Team",
+        "Average Time (min)": "Average Time (minutes)"
+    }
+)
+
+fig_team_time.update_traces(
+    texttemplate="%{text:.2f}",
+    textposition="outside"
+)
+
+fig_team_time.update_layout(
+    xaxis_title="Team",
+    yaxis_title="Average Time (minutes)",
+    height=450
+)
+
+st.plotly_chart(
+    fig_team_time,
+    use_container_width=True
+)
+
+# ============================================================
+# TEAM PERCENTAGE CHART
+# ============================================================
+
+st.subheader("📊 Average Percentage: Apple vs Orange")
+
+fig_team_percentage = px.bar(
+    team_summary,
+    x="Team",
+    y="Average Percentage",
+    color="Team",
+    text="Average Percentage",
+    title="Average Percentage by Team",
+    labels={
+        "Team": "Team",
+        "Average Percentage": "Average Percentage"
+    }
+)
+
+fig_team_percentage.update_traces(
+    texttemplate="%{text:.2f}%",
+    textposition="outside"
+)
+
+fig_team_percentage.update_layout(
+    xaxis_title="Team",
+    yaxis_title="Average Percentage",
+    height=450
+)
+
+st.plotly_chart(
+    fig_team_percentage,
+    use_container_width=True
+)
+
+# ============================================================
+# TEAM ATTEMPTS CHART
+# ============================================================
+
+st.subheader("🔄 Assessment Attempts: Apple vs Orange")
+
+fig_team_attempts = px.bar(
+    team_summary,
+    x="Team",
+    y="Assessment Attempts",
+    color="Team",
+    text="Assessment Attempts",
+    title="Total Assessment Attempts by Team",
+    labels={
+        "Team": "Team",
+        "Assessment Attempts": "Total Attempts"
+    }
+)
+
+fig_team_attempts.update_traces(
+    textposition="outside"
+)
+
+fig_team_attempts.update_layout(
+    xaxis_title="Team",
+    yaxis_title="Total Assessment Attempts",
+    height=450
+)
+
+st.plotly_chart(
+    fig_team_attempts,
+    use_container_width=True
+)
+
+# ============================================================
+# TEAM IMPROVEMENT CHART
+# ============================================================
+
+st.subheader("📈 Average Improvement: Apple vs Orange")
+
+fig_team_improvement = px.bar(
+    team_summary,
+    x="Team",
+    y="Average Improvement",
+    color="Team",
+    text="Average Improvement",
+    title="Average Improvement by Team",
+    labels={
+        "Team": "Team",
+        "Average Improvement": "Average Improvement (marks)"
+    }
+)
+
+fig_team_improvement.update_traces(
+    texttemplate="%{text:.2f}",
+    textposition="outside"
+)
+
+fig_team_improvement.update_layout(
+    xaxis_title="Team",
+    yaxis_title="Average Improvement (marks)",
+    height=450
+)
+
+st.plotly_chart(
+    fig_team_improvement,
+    use_container_width=True
+)
+
+# ============================================================
+# TEAM MEMBER COMPARISON
+# ============================================================
+
+st.subheader("👥 Student-wise Apple vs Orange Comparison")
+
+team_member_display = student_summary.copy()
+
+# Add average score and average time per student
+student_avg_score = (
+    clean_df
+    .groupby("Student Name")[score_column]
+    .mean()
+    .rename("Average Score")
+)
+
+student_avg_percentage = (
+    clean_df
+    .groupby("Student Name")["Percentage"]
+    .mean()
+    .rename("Average Percentage")
+)
+
+student_avg_time = (
+    clean_df
+    .groupby("Student Name")["Time (minutes)"]
+    .mean()
+    .rename("Average Time (min)")
+)
+
+team_member_display = (
+    team_member_display
+    .set_index("Student Name")
+    .join(student_avg_score)
+    .join(student_avg_percentage)
+    .join(student_avg_time)
+    .reset_index()
+)
+
+team_member_display = team_member_display[
+    team_member_display["Team"].isin(
+        ["Apple", "Orange"]
+    )
+].copy()
+
+for column in [
+    "Average Score",
+    "Average Percentage",
+    "Average Time (min)",
+    "First Attempt Score",
+    "Latest Attempt Score",
+    "True Improvement"
+]:
+    team_member_display[column] = (
+        team_member_display[column].round(2)
+    )
+
+st.dataframe(
+    team_member_display[
+        [
+            "Student Name",
+            "Team",
+            "Average Score",
+            "Average Percentage",
+            "Average Time (min)",
+            "Assessment Attempts",
+            "First Attempt Score",
+            "Latest Attempt Score",
+            "True Improvement"
+        ]
+    ].sort_values(
+        ["Team", "Average Score"],
+        ascending=[True, False]
+    ),
+    use_container_width=True,
+    hide_index=True
+)
+
+# ============================================================
+# QUESTION-WISE ANALYSIS
+# ============================================================
+
+st.subheader("📝 Question-wise Analysis")
+
+if len(question_summary) > 0:
+
+    question_display = question_summary.copy()
+
+    question_display["Average"] = (
+        question_display["Average"].round(2)
+    )
 
     st.dataframe(
-        question_summary,
+        question_display,
         use_container_width=True,
         hide_index=True
     )
-
-
-    # Question average chart
 
     fig_question = px.bar(
         question_summary,
         x="Question",
         y="Average",
-        title="Average Performance by Question",
+        text="Average",
+        title="Question-wise Average Score",
         labels={
             "Question": "Question",
             "Average": "Average Score"
-        },
-        text="Average"
+        }
     )
-
 
     fig_question.update_traces(
         texttemplate="%{text:.2f}",
-        textposition="outside",
-        hovertemplate=(
-            "<b>%{x}</b><br>"
-            "Average: %{y:.2f}<br>"
-            "<extra></extra>"
-        )
+        textposition="outside"
     )
-
 
     fig_question.update_layout(
         xaxis_title="Question",
         yaxis_title="Average Score",
-        height=500,
-        showlegend=False
+        height=500
     )
-
 
     st.plotly_chart(
         fig_question,
         use_container_width=True
     )
 
-
-    # Attempted vs not attempted
-
-    question_attempt = question_summary.melt(
-        id_vars="Question",
-        value_vars=[
-            "Attempted",
-            "Not Attempted"
-        ],
-        var_name="Attempt Status",
-        value_name="Students"
-    )
-
-
-    fig_attempt = px.bar(
-        question_attempt,
-        x="Question",
-        y="Students",
-        color="Attempt Status",
-        barmode="group",
-        title="Question-wise Attempt Status",
-        labels={
-            "Question": "Question",
-            "Students": "Number of Students",
-            "Attempt Status": "Attempt Status"
-        },
-        text="Students"
-    )
-
-
-    fig_attempt.update_traces(
-        textposition="outside"
-    )
-
-
-    fig_attempt.update_layout(
-        xaxis_title="Question",
-        yaxis_title="Number of Students",
-        height=550
-    )
-
-
-    st.plotly_chart(
-        fig_attempt,
-        use_container_width=True
-    )
-
+else:
+    st.info("No question columns beginning with Q were found.")
 
 # ============================================================
-# 12. COMPLETE STUDENT ANALYSIS
+# COMPLETE CLEANED ANALYSIS
 # ============================================================
 
-st.subheader("📋 Complete Student Analysis")
-
+st.subheader("📋 Complete Cleaned Student Analysis")
 
 complete_columns = [
-    column
-    for column in df_original.columns
-    if column in df.columns
-]
-
-
-# Add calculated columns
-
-calculated_columns = [
     "Student Name",
+    "Team",
+    score_column,
     "Percentage",
-    "Improvement",
-    "Performance",
+    "Difference from Class Average",
     "Improvement Status",
-    "Outlier"
+    "Performance",
+    "Outlier",
+    "Time (minutes)",
+    "Attempt Number"
 ]
 
+extra_columns = [
+    "Email address",
+    "Status",
+    "Started",
+    "Completed",
+    "Duration"
+]
 
-for column in calculated_columns:
+complete_columns += [
+    column
+    for column in extra_columns
+    if column in clean_df.columns
+]
 
-    if column in df.columns and column not in complete_columns:
-
-        complete_columns.append(column)
-
-
-complete_df = df[
+complete_df = clean_df[
     complete_columns
 ].copy()
 
-
-if "Percentage" in complete_df.columns:
-
-    complete_df["Percentage"] = (
-        complete_df["Percentage"]
-        .round(2)
-    )
-
-
-if "Improvement" in complete_df.columns:
-
-    complete_df["Improvement"] = (
-        complete_df["Improvement"]
-        .round(2)
-    )
-
+for column in [
+    "Percentage",
+    "Difference from Class Average",
+    "Time (minutes)"
+]:
+    if column in complete_df.columns:
+        complete_df[column] = (
+            complete_df[column].round(2)
+        )
 
 complete_df = complete_df.sort_values(
     score_column,
     ascending=False
 )
-
 
 st.dataframe(
     complete_df,
@@ -1106,83 +1476,49 @@ st.dataframe(
     hide_index=True
 )
 
-
 # ============================================================
-# 13. ORIGINAL DATA vs CLEANED DATA
-# ============================================================
-
-st.subheader("🔍 Original vs Cleaned Dataset")
-
-
-comparison_col1, comparison_col2 = st.columns(2)
-
-
-with comparison_col1:
-
-    st.metric(
-        "Original Rows",
-        len(df_original)
-    )
-
-
-with comparison_col2:
-
-    st.metric(
-        "Rows After Outlier Removal",
-        len(df)
-    )
-
-
-st.caption(
-    f"Rows removed as outliers: "
-    f"{len(df_original) - len(df)}"
-)
-
-
-# ============================================================
-# 14. DOWNLOAD CLEANED DATA
+# DOWNLOADS
 # ============================================================
 
 st.subheader("⬇️ Download Analysis")
 
+download_col1, download_col2, download_col3 = st.columns(3)
 
-cleaned_csv = complete_df.to_csv(
-    index=False
-)
+# Complete cleaned analysis
+clean_csv = complete_df.to_csv(index=False)
 
-
-st.download_button(
-    label="📥 Download Cleaned Analysis CSV",
-    data=cleaned_csv,
+download_col1.download_button(
+    label="📥 Cleaned Analysis CSV",
+    data=clean_csv,
     file_name="cleaned_student_analysis.csv",
     mime="text/csv"
 )
 
+# Student summary
+summary_csv = student_summary.to_csv(index=False)
 
-# ============================================================
-# DOWNLOAD OUTLIERS
-# ============================================================
+download_col2.download_button(
+    label="📥 Student Summary CSV",
+    data=summary_csv,
+    file_name="student_attempt_summary.csv",
+    mime="text/csv"
+)
 
-if len(outliers) > 0:
+# Team summary
+team_csv = team_summary_display.to_csv(index=False)
 
-    outlier_csv = outliers.to_csv(
-        index=False
-    )
-
-    st.download_button(
-        label="📥 Download Removed Outliers",
-        data=outlier_csv,
-        file_name="removed_outliers.csv",
-        mime="text/csv"
-    )
-
-
-# ============================================================
-# FOOTER
-# ============================================================
+download_col3.download_button(
+    label="📥 Team Comparison CSV",
+    data=team_csv,
+    file_name="apple_orange_team_comparison.csv",
+    mime="text/csv"
+)
 
 st.markdown("---")
 
 st.caption(
-    "📊 Student Performance & Improvement Analysis Dashboard"
+    "📊 Student Performance Dashboard | "
+    "IQR-based outlier detection | "
+    "Attempt-based improvement | "
+    "Apple vs Orange team analysis"
 )
