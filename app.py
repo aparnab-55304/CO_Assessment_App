@@ -1,19 +1,37 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+
+
+# ============================================================
+# PAGE CONFIGURATION
+# ============================================================
 
 st.set_page_config(
-    page_title="Student Improvement Analysis",
-    page_icon="📈",
+    page_title="Student Performance Dashboard",
+    page_icon="📊",
     layout="wide"
 )
 
-st.title("📊 Student Performance Dashboard")
-st.header("📈 Student Improvement Analysis")
-st.write("Upload the assessment CSV file to analyse student performance.")
 
-# --------------------------------------------------
-# FILE UPLOAD
-# --------------------------------------------------
+# ============================================================
+# TITLE
+# ============================================================
+
+st.title("📊 Student Performance Dashboard")
+st.header("📈 Student Improvement & Assessment Analysis")
+
+st.write(
+    "Upload the assessment CSV file to analyse student performance, "
+    "scores, improvement, duration, question-wise performance and outliers."
+)
+
+
+# ============================================================
+# SIDEBAR
+# ============================================================
 
 st.sidebar.header("📂 Upload CSV")
 
@@ -22,33 +40,49 @@ uploaded_file = st.sidebar.file_uploader(
     type=["csv"]
 )
 
-if uploaded_file is None: st.info("Please upload your CSV file from the sidebar."); st.stop()
 
-# --------------------------------------------------
+if uploaded_file is None:
+    st.info("Please upload your CSV file from the sidebar.")
+    st.stop()
+
+
+# ============================================================
 # READ CSV
-# --------------------------------------------------
+# ============================================================
 
-df = pd.read_csv(uploaded_file)
+df_original = pd.read_csv(uploaded_file)
 
-df.columns = df.columns.astype(str).str.strip()
+df_original.columns = (
+    df_original.columns
+    .astype(str)
+    .str.strip()
+)
+
 
 st.success("✅ CSV uploaded successfully.")
 
-# --------------------------------------------------
-# SHOW ORIGINAL DATA
-# --------------------------------------------------
 
-st.subheader("📋 Uploaded Data")
+# ============================================================
+# ORIGINAL DATA
+# ============================================================
+
+st.subheader("📋 Complete Uploaded CSV Data")
+
+st.caption(
+    f"Original dataset: {len(df_original)} rows × "
+    f"{len(df_original.columns)} columns"
+)
 
 st.dataframe(
-    df,
+    df_original,
     use_container_width=True,
     hide_index=True
 )
 
-# --------------------------------------------------
-# FIND SCORE COLUMN
-# --------------------------------------------------
+
+# ============================================================
+# SCORE COLUMN
+# ============================================================
 
 possible_score_columns = [
     "Grade/15.00",
@@ -59,35 +93,56 @@ possible_score_columns = [
     "Final Score"
 ]
 
-numeric_columns = df.select_dtypes(
+
+numeric_columns = df_original.select_dtypes(
     include="number"
 ).columns.tolist()
 
+
 score_column = next(
-    (column for column in possible_score_columns if column in df.columns),
+    (
+        column
+        for column in possible_score_columns
+        if column in df_original.columns
+    ),
     numeric_columns[0] if numeric_columns else None
 )
 
-score_column is None and st.error("❌ No score column was found.")
-score_column is None and st.write("Available columns:", list(df.columns))
-score_column is None and st.stop()
 
-# --------------------------------------------------
-# CONVERT SCORE
-# --------------------------------------------------
+if score_column is None:
+
+    st.error("❌ No score column was found.")
+
+    st.write(
+        "Available columns:",
+        list(df_original.columns)
+    )
+
+    st.stop()
+
+
+# ============================================================
+# WORKING COPY
+# ============================================================
+
+df = df_original.copy()
+
 
 df[score_column] = pd.to_numeric(
     df[score_column],
     errors="coerce"
 )
 
+
+# Remove rows where score is missing
 df = df.dropna(
     subset=[score_column]
 ).copy()
 
-# --------------------------------------------------
+
+# ============================================================
 # STUDENT NAME
-# --------------------------------------------------
+# ============================================================
 
 first_name = df.get(
     "First name",
@@ -104,20 +159,117 @@ email = df.get(
     pd.Series("", index=df.index)
 )
 
+
 df["Student Name"] = (
     first_name.fillna("").astype(str).str.strip()
     + " "
     + last_name.fillna("").astype(str).str.strip()
 ).str.strip()
 
+
 df["Student Name"] = df["Student Name"].where(
     df["Student Name"].ne(""),
     email.fillna("").astype(str).str.strip()
 )
 
-# --------------------------------------------------
+
+# ============================================================
+# OUTLIER DETECTION USING IQR
+# ============================================================
+
+Q1 = df[score_column].quantile(0.25)
+
+Q3 = df[score_column].quantile(0.75)
+
+IQR = Q3 - Q1
+
+lower_bound = Q1 - 1.5 * IQR
+
+upper_bound = Q3 + 1.5 * IQR
+
+
+df["Outlier"] = (
+    (df[score_column] < lower_bound)
+    |
+    (df[score_column] > upper_bound)
+)
+
+
+outliers = df[
+    df["Outlier"]
+].copy()
+
+
+clean_df = df[
+    ~df["Outlier"]
+].copy()
+
+
+# ============================================================
+# OUTLIER SUMMARY
+# ============================================================
+
+st.subheader("🚨 Outlier Detection")
+
+o1, o2, o3, o4 = st.columns(4)
+
+o1.metric(
+    "Q1",
+    f"{Q1:.2f}"
+)
+
+o2.metric(
+    "Q3",
+    f"{Q3:.2f}"
+)
+
+o3.metric(
+    "IQR",
+    f"{IQR:.2f}"
+)
+
+o4.metric(
+    "Outliers Removed",
+    len(outliers)
+)
+
+
+st.info(
+    f"IQR lower limit = {lower_bound:.2f} | "
+    f"IQR upper limit = {upper_bound:.2f}"
+)
+
+
+if len(outliers) > 0:
+
+    st.warning(
+        f"⚠️ {len(outliers)} observation(s) were identified "
+        f"as score outliers."
+    )
+
+    st.dataframe(
+        outliers,
+        use_container_width=True,
+        hide_index=True
+    )
+
+else:
+
+    st.success(
+        "✅ No score outliers were detected using the IQR method."
+    )
+
+
+# ============================================================
+# USE CLEAN DATA FOR ANALYSIS
+# ============================================================
+
+df = clean_df.copy()
+
+
+# ============================================================
 # BASIC STATISTICS
-# --------------------------------------------------
+# ============================================================
 
 max_score = 15.0
 
@@ -131,30 +283,42 @@ lowest_score = df[score_column].min()
 
 median_score = df[score_column].median()
 
-# --------------------------------------------------
+std_score = df[score_column].std()
+
+cv = (
+    std_score / average_score * 100
+    if average_score != 0
+    else np.nan
+)
+
+
+# ============================================================
 # PERCENTAGE
-# --------------------------------------------------
+# ============================================================
 
 df["Percentage"] = (
     df[score_column] / max_score
 ) * 100
+
 
 df["Percentage"] = df["Percentage"].clip(
     0,
     100
 )
 
-# --------------------------------------------------
+
+# ============================================================
 # IMPROVEMENT
-# --------------------------------------------------
+# ============================================================
 
 df["Improvement"] = (
     df[score_column] - average_score
 )
 
-# --------------------------------------------------
+
+# ============================================================
 # PERFORMANCE CATEGORY
-# --------------------------------------------------
+# ============================================================
 
 df["Performance"] = pd.cut(
     df["Percentage"],
@@ -168,9 +332,10 @@ df["Performance"] = pd.cut(
     right=False
 )
 
-# --------------------------------------------------
+
+# ============================================================
 # IMPROVEMENT STATUS
-# --------------------------------------------------
+# ============================================================
 
 df["Improvement Status"] = pd.cut(
     df["Improvement"],
@@ -187,13 +352,14 @@ df["Improvement Status"] = pd.cut(
     ]
 )
 
-# --------------------------------------------------
+
+# ============================================================
 # MAIN METRICS
-# --------------------------------------------------
+# ============================================================
 
-st.subheader("📌 Overall Performance")
+st.subheader("📌 Overall Performance After Outlier Removal")
 
-col1, col2, col3, col4, col5 = st.columns(5)
+col1, col2, col3, col4, col5, col6 = st.columns(6)
 
 col1.metric(
     "👨‍🎓 Students",
@@ -220,9 +386,15 @@ col5.metric(
     f"{median_score:.2f}"
 )
 
-# --------------------------------------------------
+col6.metric(
+    "📐 CV",
+    f"{cv:.2f}%"
+)
+
+
+# ============================================================
 # PERFORMANCE COUNTS
-# --------------------------------------------------
+# ============================================================
 
 performance_counts = (
     df["Performance"]
@@ -237,6 +409,7 @@ performance_counts = (
         fill_value=0
     )
 )
+
 
 st.subheader("📊 Performance Categories")
 
@@ -262,9 +435,10 @@ c4.metric(
     int(performance_counts["Needs Improvement"])
 )
 
-# --------------------------------------------------
-# SCORE CHART
-# --------------------------------------------------
+
+# ============================================================
+# 1. STUDENT SCORE COMPARISON
+# ============================================================
 
 st.subheader("📈 Student Score Comparison")
 
@@ -276,117 +450,59 @@ score_chart = (
         score_column,
         ascending=False
     )
-    .set_index("Student Name")
 )
 
-st.bar_chart(
+
+fig_score = px.bar(
     score_chart,
-    height=450
+    x="Student Name",
+    y=score_column,
+    title="Student Score Comparison",
+    labels={
+        "Student Name": "Student",
+        score_column: "Score"
+    },
+    text=score_column
 )
 
-# --------------------------------------------------
-# SCORE DATA LABELS
-# --------------------------------------------------
 
-st.markdown("### 🔢 Score Details")
-
-score_details = df[
-    [
-        "Student Name",
-        score_column,
-        "Percentage",
-        "Performance"
-    ]
-].copy()
-
-score_details["Score"] = (
-    score_details[score_column]
-    .round(2)
-    .astype(str)
-    + " / 15"
-)
-
-score_details["Percentage"] = (
-    score_details["Percentage"]
-    .round(2)
-    .astype(str)
-    + "%"
-)
-
-score_details = score_details.sort_values(
-    score_column,
-    ascending=False
-)
-
-st.dataframe(
-    score_details[
-        [
-            "Student Name",
-            "Score",
-            "Percentage",
-            "Performance"
-        ]
-    ],
-    use_container_width=True,
-    hide_index=True
-)
-
-# --------------------------------------------------
-# IMPROVEMENT CHART
-# --------------------------------------------------
-
-st.subheader("📈 Improvement Relative to Class Average")
-
-improvement_chart = (
-    df[
-        ["Student Name", "Improvement"]
-    ]
-    .sort_values(
-        "Improvement",
-        ascending=False
+fig_score.update_traces(
+    texttemplate="%{text:.2f}",
+    textposition="outside",
+    hovertemplate=(
+        "<b>%{x}</b><br>"
+        "Score: %{y:.2f}/15"
+        "<extra></extra>"
     )
-    .set_index("Student Name")
 )
 
-st.bar_chart(
-    improvement_chart,
-    height=450
+
+fig_score.update_layout(
+    xaxis_title="Student",
+    yaxis_title="Score",
+    xaxis_tickangle=-45,
+    height=600,
+    showlegend=False
 )
 
-# --------------------------------------------------
-# IMPROVEMENT DETAILS
-# --------------------------------------------------
 
-st.markdown("### 🔎 Improvement Details")
-
-improvement_details = df[
-    [
-        "Student Name",
-        score_column,
-        "Improvement",
-        "Improvement Status"
+fig_score.update_yaxes(
+    range=[
+        0,
+        max(15, highest_score + 1)
     ]
-].copy()
-
-improvement_details["Improvement"] = (
-    improvement_details["Improvement"]
-    .round(2)
 )
 
-improvement_details = improvement_details.sort_values(
-    "Improvement",
-    ascending=False
+
+st.plotly_chart(
+    fig_score,
+    use_container_width=True
 )
 
-st.dataframe(
-    improvement_details,
-    use_container_width=True,
-    hide_index=True
-)
 
-# --------------------------------------------------
-# PERCENTAGE CHART
-# --------------------------------------------------
+# ============================================================
+# 2. PERCENTAGE CHART
+# ============================================================
 
 st.subheader("📊 Student Percentage")
 
@@ -398,19 +514,190 @@ percentage_chart = (
         "Percentage",
         ascending=False
     )
-    .set_index("Student Name")
 )
 
-st.bar_chart(
+
+fig_percentage = px.bar(
     percentage_chart,
-    height=450
+    x="Student Name",
+    y="Percentage",
+    title="Student Percentage Comparison",
+    labels={
+        "Student Name": "Student",
+        "Percentage": "Percentage (%)"
+    },
+    text="Percentage"
 )
 
-# --------------------------------------------------
-# TOP STUDENTS
-# --------------------------------------------------
+
+fig_percentage.update_traces(
+    texttemplate="%{text:.1f}%",
+    textposition="outside",
+    hovertemplate=(
+        "<b>%{x}</b><br>"
+        "Percentage: %{y:.2f}%"
+        "<extra></extra>"
+    )
+)
+
+
+fig_percentage.update_layout(
+    xaxis_title="Student",
+    yaxis_title="Percentage (%)",
+    xaxis_tickangle=-45,
+    height=600,
+    showlegend=False
+)
+
+
+fig_percentage.update_yaxes(
+    range=[0, 105]
+)
+
+
+st.plotly_chart(
+    fig_percentage,
+    use_container_width=True
+)
+
+
+# ============================================================
+# 3. IMPROVEMENT CHART
+# ============================================================
+
+st.subheader(
+    "📈 Improvement Relative to Class Average"
+)
+
+
+improvement_chart = (
+    df[
+        ["Student Name", "Improvement"]
+    ]
+    .sort_values(
+        "Improvement",
+        ascending=False
+    )
+)
+
+
+fig_improvement = px.bar(
+    improvement_chart,
+    x="Student Name",
+    y="Improvement",
+    title="Student Improvement Relative to Class Average",
+    labels={
+        "Student Name": "Student",
+        "Improvement": "Difference from Class Average"
+    },
+    text="Improvement"
+)
+
+
+fig_improvement.update_traces(
+    texttemplate="%{text:.2f}",
+    textposition="outside",
+    hovertemplate=(
+        "<b>%{x}</b><br>"
+        "Difference: %{y:.2f}<br>"
+        "<extra></extra>"
+    )
+)
+
+
+fig_improvement.add_hline(
+    y=0,
+    line_width=2,
+    line_dash="dash"
+)
+
+
+fig_improvement.update_layout(
+    xaxis_title="Student",
+    yaxis_title="Score Difference from Class Average",
+    xaxis_tickangle=-45,
+    height=600,
+    showlegend=False
+)
+
+
+st.plotly_chart(
+    fig_improvement,
+    use_container_width=True
+)
+
+
+# ============================================================
+# 4. SCORE DISTRIBUTION
+# ============================================================
+
+st.subheader("📊 Score Distribution")
+
+
+fig_distribution = px.histogram(
+    df,
+    x=score_column,
+    nbins=10,
+    title="Distribution of Student Scores",
+    labels={
+        score_column: "Score",
+        "count": "Number of Students"
+    },
+    text_auto=True
+)
+
+
+fig_distribution.update_layout(
+    xaxis_title="Score",
+    yaxis_title="Number of Students",
+    height=500,
+    showlegend=False
+)
+
+
+st.plotly_chart(
+    fig_distribution,
+    use_container_width=True
+)
+
+
+# ============================================================
+# 5. BOX PLOT
+# ============================================================
+
+st.subheader("📦 Score Box Plot")
+
+
+fig_box = px.box(
+    df,
+    y=score_column,
+    points="all",
+    title="Score Distribution and Remaining Observations",
+    labels={
+        score_column: "Score"
+    }
+)
+
+
+fig_box.update_layout(
+    yaxis_title="Score",
+    height=500,
+    showlegend=False
+)
+
+
+st.plotly_chart(
+    fig_box,
+    use_container_width=True
+)
+
+
+# ============================================================
+# 6. TOP STUDENTS
+# ============================================================
 
 st.subheader("🏆 Top Performing Students")
+
 
 top_students = df.nlargest(
     min(5, len(df)),
@@ -424,10 +711,12 @@ top_students = df.nlargest(
     ]
 ].copy()
 
+
 top_students["Percentage"] = (
     top_students["Percentage"]
     .round(2)
 )
+
 
 st.dataframe(
     top_students,
@@ -435,11 +724,15 @@ st.dataframe(
     hide_index=True
 )
 
-# --------------------------------------------------
-# STUDENTS BELOW AVERAGE
-# --------------------------------------------------
 
-st.subheader("⚠️ Students Below Class Average")
+# ============================================================
+# 7. BELOW AVERAGE STUDENTS
+# ============================================================
+
+st.subheader(
+    "⚠️ Students Below Class Average"
+)
+
 
 below_average = df[
     df[score_column] < average_score
@@ -452,15 +745,18 @@ below_average = df[
     ]
 ].copy()
 
+
 below_average["Percentage"] = (
     below_average["Percentage"]
     .round(2)
 )
 
+
 below_average["Improvement"] = (
     below_average["Improvement"]
     .round(2)
 )
+
 
 st.dataframe(
     below_average,
@@ -468,51 +764,144 @@ st.dataframe(
     hide_index=True
 )
 
-# --------------------------------------------------
-# DURATION
-# --------------------------------------------------
 
-st.subheader("⏱️ Assessment Duration")
+# ============================================================
+# 8. DURATION ANALYSIS
+# ============================================================
 
-duration_data = pd.DataFrame()
+if "Duration" in df.columns:
 
-duration_data["Student Name"] = df["Student Name"]
+    st.subheader("⏱️ Assessment Duration")
 
-duration_data["Duration"] = df.get(
-    "Duration",
-    pd.Series("Not available", index=df.index)
-)
+    duration_df = df[
+        [
+            "Student Name",
+            "Duration"
+        ]
+    ].copy()
 
-st.dataframe(
-    duration_data,
-    use_container_width=True,
-    hide_index=True
-)
+    st.dataframe(
+        duration_df,
+        use_container_width=True,
+        hide_index=True
+    )
 
-# --------------------------------------------------
-# STATUS
-# --------------------------------------------------
 
-st.subheader("📌 Student Status")
+# ============================================================
+# 9. SCORE VS DURATION
+# ============================================================
 
-status_data = pd.DataFrame()
+if "Duration" in df.columns:
 
-status_data["Student Name"] = df["Student Name"]
+    duration_numeric = pd.to_numeric(
+        df["Duration"],
+        errors="coerce"
+    )
 
-status_data["Status"] = df.get(
-    "Status",
-    pd.Series("Not available", index=df.index)
-)
+    if duration_numeric.notna().sum() > 1:
 
-st.dataframe(
-    status_data,
-    use_container_width=True,
-    hide_index=True
-)
+        chart_duration = df.copy()
 
-# --------------------------------------------------
-# QUESTION-WISE ANALYSIS
-# --------------------------------------------------
+        chart_duration["Duration Numeric"] = (
+            duration_numeric
+        )
+
+        chart_duration = chart_duration.dropna(
+            subset=["Duration Numeric"]
+        )
+
+        st.subheader(
+            "⏱️ Score vs Assessment Duration"
+        )
+
+        fig_duration = px.scatter(
+            chart_duration,
+            x="Duration Numeric",
+            y=score_column,
+            hover_name="Student Name",
+            title="Relationship Between Assessment Duration and Score",
+            labels={
+                "Duration Numeric": "Assessment Duration",
+                score_column: "Score"
+            },
+            text="Student Name"
+        )
+
+        fig_duration.update_traces(
+            marker=dict(size=12),
+            hovertemplate=(
+                "<b>%{hovertext}</b><br>"
+                "Duration: %{x}<br>"
+                "Score: %{y:.2f}<br>"
+                "<extra></extra>"
+            )
+        )
+
+        fig_duration.update_layout(
+            xaxis_title="Assessment Duration",
+            yaxis_title="Score",
+            height=600
+        )
+
+        st.plotly_chart(
+            fig_duration,
+            use_container_width=True
+        )
+
+
+# ============================================================
+# 10. STATUS ANALYSIS
+# ============================================================
+
+if "Status" in df.columns:
+
+    st.subheader("📌 Student Status")
+
+    status_counts = (
+        df["Status"]
+        .fillna("Unknown")
+        .astype(str)
+        .value_counts()
+        .reset_index()
+    )
+
+    status_counts.columns = [
+        "Status",
+        "Students"
+    ]
+
+    fig_status = px.bar(
+        status_counts,
+        x="Status",
+        y="Students",
+        title="Student Status Distribution",
+        labels={
+            "Status": "Student Status",
+            "Students": "Number of Students"
+        },
+        text="Students"
+    )
+
+    fig_status.update_traces(
+        textposition="outside"
+    )
+
+    fig_status.update_layout(
+        xaxis_title="Student Status",
+        yaxis_title="Number of Students",
+        height=500,
+        showlegend=False
+    )
+
+    st.plotly_chart(
+        fig_status,
+        use_container_width=True
+    )
+
+
+# ============================================================
+# 11. QUESTION-WISE ANALYSIS
+# ============================================================
 
 question_columns = [
     column
@@ -520,87 +909,196 @@ question_columns = [
     if str(column).upper().startswith("Q")
 ]
 
-question_results = []
 
-for question in question_columns:
+if question_columns:
 
-    values = pd.to_numeric(
-        df[question],
-        errors="coerce"
+    st.subheader("📝 Question-wise Analysis")
+
+
+    question_results = []
+
+
+    for question in question_columns:
+
+        values = pd.to_numeric(
+            df[question],
+            errors="coerce"
+        )
+
+        question_results.append(
+            {
+                "Question": question,
+                "Average": values.mean(),
+                "Attempted": values.notna().sum(),
+                "Not Attempted": values.isna().sum()
+            }
+        )
+
+
+    question_summary = pd.DataFrame(
+        question_results
     )
 
-    question_results.append(
-        {
-            "Question": question,
-            "Average": values.mean(),
-            "Attempted": values.notna().sum()
-        }
+
+    question_summary["Average"] = (
+        question_summary["Average"]
+        .round(2)
     )
 
-question_summary = pd.DataFrame(
-    question_results
-)
 
-st.subheader("📝 Question-wise Analysis")
+    st.dataframe(
+        question_summary,
+        use_container_width=True,
+        hide_index=True
+    )
 
-st.dataframe(
-    question_summary,
-    use_container_width=True,
-    hide_index=True
-)
 
-question_columns and st.bar_chart(
-    question_summary.set_index("Question")["Average"],
-    height=400
-)
+    # Question average chart
 
-# --------------------------------------------------
-# COMPLETE ANALYSIS
-# --------------------------------------------------
+    fig_question = px.bar(
+        question_summary,
+        x="Question",
+        y="Average",
+        title="Average Performance by Question",
+        labels={
+            "Question": "Question",
+            "Average": "Average Score"
+        },
+        text="Average"
+    )
+
+
+    fig_question.update_traces(
+        texttemplate="%{text:.2f}",
+        textposition="outside",
+        hovertemplate=(
+            "<b>%{x}</b><br>"
+            "Average: %{y:.2f}<br>"
+            "<extra></extra>"
+        )
+    )
+
+
+    fig_question.update_layout(
+        xaxis_title="Question",
+        yaxis_title="Average Score",
+        height=500,
+        showlegend=False
+    )
+
+
+    st.plotly_chart(
+        fig_question,
+        use_container_width=True
+    )
+
+
+    # Attempted vs not attempted
+
+    question_attempt = question_summary.melt(
+        id_vars="Question",
+        value_vars=[
+            "Attempted",
+            "Not Attempted"
+        ],
+        var_name="Attempt Status",
+        value_name="Students"
+    )
+
+
+    fig_attempt = px.bar(
+        question_attempt,
+        x="Question",
+        y="Students",
+        color="Attempt Status",
+        barmode="group",
+        title="Question-wise Attempt Status",
+        labels={
+            "Question": "Question",
+            "Students": "Number of Students",
+            "Attempt Status": "Attempt Status"
+        },
+        text="Students"
+    )
+
+
+    fig_attempt.update_traces(
+        textposition="outside"
+    )
+
+
+    fig_attempt.update_layout(
+        xaxis_title="Question",
+        yaxis_title="Number of Students",
+        height=550
+    )
+
+
+    st.plotly_chart(
+        fig_attempt,
+        use_container_width=True
+    )
+
+
+# ============================================================
+# 12. COMPLETE STUDENT ANALYSIS
+# ============================================================
 
 st.subheader("📋 Complete Student Analysis")
 
+
 complete_columns = [
+    column
+    for column in df_original.columns
+    if column in df.columns
+]
+
+
+# Add calculated columns
+
+calculated_columns = [
     "Student Name",
-    score_column,
     "Percentage",
     "Improvement",
     "Performance",
-    "Improvement Status"
+    "Improvement Status",
+    "Outlier"
 ]
 
-extra_columns = [
-    "Email address",
-    "Status",
-    "Started",
-    "Completed",
-    "Duration"
-]
 
-complete_columns += [
-    column
-    for column in extra_columns
-    if column in df.columns
-]
+for column in calculated_columns:
+
+    if column in df.columns and column not in complete_columns:
+
+        complete_columns.append(column)
+
 
 complete_df = df[
     complete_columns
 ].copy()
 
-complete_df["Percentage"] = (
-    complete_df["Percentage"]
-    .round(2)
-)
 
-complete_df["Improvement"] = (
-    complete_df["Improvement"]
-    .round(2)
-)
+if "Percentage" in complete_df.columns:
+
+    complete_df["Percentage"] = (
+        complete_df["Percentage"]
+        .round(2)
+    )
+
+
+if "Improvement" in complete_df.columns:
+
+    complete_df["Improvement"] = (
+        complete_df["Improvement"]
+        .round(2)
+    )
+
 
 complete_df = complete_df.sort_values(
     score_column,
     ascending=False
 )
+
 
 st.dataframe(
     complete_df,
@@ -608,25 +1106,83 @@ st.dataframe(
     hide_index=True
 )
 
-# --------------------------------------------------
-# DOWNLOAD
-# --------------------------------------------------
+
+# ============================================================
+# 13. ORIGINAL DATA vs CLEANED DATA
+# ============================================================
+
+st.subheader("🔍 Original vs Cleaned Dataset")
+
+
+comparison_col1, comparison_col2 = st.columns(2)
+
+
+with comparison_col1:
+
+    st.metric(
+        "Original Rows",
+        len(df_original)
+    )
+
+
+with comparison_col2:
+
+    st.metric(
+        "Rows After Outlier Removal",
+        len(df)
+    )
+
+
+st.caption(
+    f"Rows removed as outliers: "
+    f"{len(df_original) - len(df)}"
+)
+
+
+# ============================================================
+# 14. DOWNLOAD CLEANED DATA
+# ============================================================
 
 st.subheader("⬇️ Download Analysis")
 
-csv_output = complete_df.to_csv(
+
+cleaned_csv = complete_df.to_csv(
     index=False
 )
 
+
 st.download_button(
-    label="📥 Download Complete Analysis CSV",
-    data=csv_output,
-    file_name="student_improvement_analysis.csv",
+    label="📥 Download Cleaned Analysis CSV",
+    data=cleaned_csv,
+    file_name="cleaned_student_analysis.csv",
     mime="text/csv"
 )
+
+
+# ============================================================
+# DOWNLOAD OUTLIERS
+# ============================================================
+
+if len(outliers) > 0:
+
+    outlier_csv = outliers.to_csv(
+        index=False
+    )
+
+    st.download_button(
+        label="📥 Download Removed Outliers",
+        data=outlier_csv,
+        file_name="removed_outliers.csv",
+        mime="text/csv"
+    )
+
+
+# ============================================================
+# FOOTER
+# ============================================================
 
 st.markdown("---")
 
 st.caption(
-    "📊 Student Improvement Analysis Dashboard"
+    "📊 Student Performance & Improvement Analysis Dashboard"
 )
