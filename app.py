@@ -178,6 +178,22 @@ def names_at(series, value):
     return ", ".join(names)
 
 
+def first_last_20_comparison(attempts):
+    rows = []
+    for student, g in attempts.groupby("Student", sort=False):
+        g = g.sort_values("Attempt")
+        n = len(g); k = max(1, int(np.ceil(n * 0.20)))
+        first, last = g.head(k), g.tail(k)
+        ft, lt = first["Time (min)"].mean(), last["Time (min)"].mean()
+        fs, ls = first["Score"].mean(), last["Score"].mean()
+        fe, le = first["Score per Minute"].mean(), last["Score per Minute"].mean()
+        rows.append({"Student":student,"Team":g["Team"].iloc[0],"Total Attempts":n,"Attempts in Each 20%":k,
+            "First 20% Score":fs,"Last 20% Score":ls,"Score Change":ls-fs,"First 20% Time":ft,"Last 20% Time":lt,
+            "Time Change":ft-lt,"Time Change (%)":((ft-lt)/ft*100) if pd.notna(ft) and ft>0 else np.nan,
+            "First 20% Efficiency":fe,"Last 20% Efficiency":le,"Efficiency Change":le-fe})
+    return pd.DataFrame(rows)
+
+
 def style_fig(fig, height=450):
     fig.update_layout(
         template="plotly_white",
@@ -368,6 +384,7 @@ A = result["attempts"]
 S = result["summary"]
 q_cols = result["q_cols"]
 incomplete = result["incomplete"]
+comparison_20 = first_last_20_comparison(A)
 
 if A.empty:
     st.error("The file contains no completed attempts with a numeric grade.")
@@ -389,6 +406,7 @@ with st.expander("Data notes and methodology"):
 - Attempts are ordered by start time. **Improvement** = latest-attempt score minus first-attempt score.
   **Best gain** = best score minus first-attempt score.
 - **Time** is converted from text such as "17 mins 25 secs" to minutes. **Score per minute** = score divided by time.
+- **First 20% vs last 20%** compares each student's earliest and latest 20% of completed attempts. Group size is ceil(20%), minimum 1. Positive time change means faster.
 - Team names are matched to the CSV tolerantly, so spelling variants such as *Sreelakhsmi* are assigned correctly.
 - No attempt is treated as an outlier or discarded; the lowest and highest scores are reported exactly as recorded.
         """
@@ -405,6 +423,7 @@ tabs = st.tabs(
         "Overview",
         "Student Performance",
         "Improvement",
+        "First 20% vs Last 20%",
         "Time and Efficiency",
         "Attempts and Activity",
         "Team Comparison",
@@ -683,9 +702,45 @@ with tabs[2]:
         st.plotly_chart(style_fig(fig, 480), **STRETCH)
 
 # ------------------------------------------------------------
-# 4. TIME AND EFFICIENCY
+# 4. FIRST 20% VS LAST 20%
 # ------------------------------------------------------------
 with tabs[3]:
+    section("First 20% versus Last 20% of Attempts")
+    st.info("The first and last 20% of each student's completed attempts are compared. Group size is ceil(20% of attempts), minimum 1. Positive Time Change means faster.")
+    c=st.columns(4)
+    with c[0]: kpi("Average Score Change",f"{comparison_20['Score Change'].mean():+.2f} marks","last 20% − first 20%")
+    with c[1]: kpi("Average Time Improvement",fmt_min(comparison_20['Time Change'].mean()),"positive = faster")
+    with c[2]:
+        p=comparison_20['Time Change (%)'].dropna(); kpi("Average Time Improvement (%)",f"{p.mean():+.1f}%" if len(p) else "N/A","positive = faster")
+    with c[3]: kpi("Students Faster",f"{int((comparison_20['Time Change']>0).sum())} / {len(comparison_20)}","last 20% took less time")
+    d=comparison_20.copy()
+    for col in ["First 20% Score","Last 20% Score","Score Change","Time Change (%)","First 20% Efficiency","Last 20% Efficiency","Efficiency Change"]: d[col]=d[col].round(2)
+    d["First 20% Time"]=d["First 20% Time"].apply(fmt_min); d["Last 20% Time"]=d["Last 20% Time"].apply(fmt_min); d["Time Change"]=d["Time Change"].apply(fmt_min)
+    show_table(d.sort_values("Time Change",ascending=False))
+    selected=st.selectbox("Select a student for detailed 20% comparison",comparison_20["Student"].tolist())
+    row=comparison_20[comparison_20["Student"]==selected].iloc[0]; k=int(row["Attempts in Each 20%"]); sa=A[A["Student"]==selected].sort_values("Attempt")
+    section(f"Detailed comparison: {selected}")
+    c=st.columns(4)
+    with c[0]: kpi("Attempts analysed",f"{k} + {k}",f"out of {len(sa)} total")
+    with c[1]: kpi("Score",f"{row['First 20% Score']:.2f} → {row['Last 20% Score']:.2f}",f"change {row['Score Change']:+.2f}")
+    with c[2]: kpi("Time",f"{fmt_min(row['First 20% Time'])} → {fmt_min(row['Last 20% Time'])}",f"change {row['Time Change (%)']:+.1f}%")
+    with c[3]: kpi("Efficiency",f"{row['First 20% Efficiency']:.2f} → {row['Last 20% Efficiency']:.2f}","marks per minute")
+    first,last=sa.head(k),sa.tail(k)
+    plot=pd.DataFrame({"Period":["First 20%","Last 20%"],"Score":[first.Score.mean(),last.Score.mean()],"Time":[first["Time (min)"].mean(),last["Time (min)"].mean()]})
+    l,r=st.columns(2)
+    with l:
+        fig=px.bar(plot,x="Period",y="Score",text="Score",title=f"{selected}: Score Comparison"); fig.update_traces(texttemplate="%{text:.2f}",textposition="outside"); fig.update_yaxes(range=[0,TOTAL_MARKS+1]); st.plotly_chart(style_fig(fig),**STRETCH)
+    with r:
+        fig=px.bar(plot,x="Period",y="Time",text="Time",title=f"{selected}: Timing Comparison"); fig.update_traces(texttemplate="%{text:.2f} min",textposition="outside"); fig.update_yaxes(title="Average time (minutes)"); st.plotly_chart(style_fig(fig),**STRETCH)
+    f=comparison_20.sort_values("Time Change",ascending=False).iloc[0]; sc=comparison_20.sort_values("Score Change",ascending=False).iloc[0]
+    e1,e2=st.columns(2)
+    with e1: st.success(f"**Most improved in timing:** {f['Student']} — {fmt_min(f['Time Change'])} faster ({f['Time Change (%)']:+.1f}%).")
+    with e2: st.success(f"**Most improved in score:** {sc['Student']} — {sc['Score Change']:+.2f} marks.")
+
+# ------------------------------------------------------------
+# 5. TIME AND EFFICIENCY
+# ------------------------------------------------------------
+with tabs[4]:
     section("Time Taken and Efficiency")
 
     tdf = A.dropna(subset=["Time (min)"])
@@ -752,7 +807,7 @@ with tabs[3]:
 # ------------------------------------------------------------
 # 5. ATTEMPTS AND ACTIVITY
 # ------------------------------------------------------------
-with tabs[4]:
+with tabs[5]:
     section("Number of Attempts")
 
     att_sum = S.sort_values("Attempts", ascending=False)
@@ -794,7 +849,7 @@ with tabs[4]:
 # ------------------------------------------------------------
 # 6. TEAM COMPARISON
 # ------------------------------------------------------------
-with tabs[5]:
+with tabs[6]:
     section("Apple versus Orange")
 
     def team_metrics(team):
@@ -954,7 +1009,7 @@ with tabs[5]:
 # ------------------------------------------------------------
 # 7. QUESTION ANALYSIS
 # ------------------------------------------------------------
-with tabs[6]:
+with tabs[7]:
     section("Question-wise Analysis")
 
     if not q_cols:
@@ -1016,7 +1071,7 @@ with tabs[6]:
 # ------------------------------------------------------------
 # 8. DATA AND DOWNLOADS
 # ------------------------------------------------------------
-with tabs[7]:
+with tabs[8]:
     section("All Completed Attempts")
 
     pick = st.multiselect("Filter by student", S["Student"].tolist(), default=[])
@@ -1039,13 +1094,15 @@ with tabs[7]:
         "Best Gain (Best - First)": S["BestGain"], "Perfect Scores": S["Perfect"].astype(int),
         "Average Time": S["AvgTime"].apply(fmt_min), "Fastest Perfect Time": S["FastestPerfect"].apply(fmt_min),
     })
-    d1, d2, d3 = st.columns(3)
+    d1, d2, d3, d4 = st.columns(4)
     d1.download_button("Student Summary (CSV)", student_export.to_csv(index=False),
                        "student_summary.csv", "text/csv")
     d2.download_button("All Attempts (CSV)", view.to_csv(index=False),
                        "all_attempts.csv", "text/csv")
+    d3.download_button("First 20% vs Last 20% (CSV)", comparison_20.to_csv(index=False),
+                       "first20_last20_comparison.csv", "text/csv")
     if not team_export.empty:
-        d3.download_button("Team Comparison (CSV)", team_export.to_csv(index=False),
+        d4.download_button("Team Comparison (CSV)", team_export.to_csv(index=False),
                            "apple_orange_comparison.csv", "text/csv")
 
 st.markdown("---")
