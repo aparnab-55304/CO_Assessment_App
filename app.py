@@ -311,6 +311,16 @@ with st.sidebar:
 filtered = data[data["Student"].isin(selected_students)].copy()
 filtered_summary = build_student_summary(filtered) if not filtered.empty else student_summary.iloc[0:0].copy()
 
+# Reattach team labels after rebuilding the filtered student summary.
+# build_student_summary() calculates performance measures but does not
+# create the Team column itself.
+if not filtered_summary.empty:
+    filtered_summary["Team"] = (
+        filtered_summary["Student"].map(team_lookup).fillna("Unassigned")
+    )
+else:
+    filtered_summary["Team"] = pd.Series(dtype="object")
+
 if filtered.empty:
     st.warning("Select at least one student from the sidebar.")
     st.stop()
