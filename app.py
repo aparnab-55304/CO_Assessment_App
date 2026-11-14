@@ -5,22 +5,142 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
+from pathlib import Path
 
 # ============================================================
 # PAGE CONFIGURATION
 # ============================================================
+# ============================================================
+# PAGE CONFIGURATION
+# ============================================================
+
 st.set_page_config(
     page_title="Quiz Performance Dashboard",
     page_icon="📊",
     layout="wide"
 )
 
+# ============================================================
+# BLUE AND WHITE THEME
+# ============================================================
+
+st.markdown("""
+<style>
+
+/* Main application */
+.stApp {
+    background-color: #FFFFFF;
+    color: #172B45;
+}
+
+/* Main content */
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+
+/* Headings */
+h1, h2, h3, h4 {
+    color: #173B70 !important;
+}
+
+/* Normal text */
+p, label, span, div {
+    color: #172B45;
+}
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background-color: #EAF2FF;
+}
+
+/* Sidebar headings */
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+    color: #173B70 !important;
+}
+
+/* Metric cards */
+[data-testid="stMetric"] {
+    background-color: #F0F5FF;
+    border: 1px solid #D4E2F5;
+    padding: 15px;
+    border-radius: 12px;
+}
+
+/* Metric values */
+[data-testid="stMetricValue"] {
+    color: #174A8B !important;
+}
+
+/* Metric labels */
+[data-testid="stMetricLabel"] {
+    color: #172B45 !important;
+}
+
+/* Buttons */
+.stButton > button {
+    background-color: #245DA5;
+    color: #FFFFFF !important;
+    border: none;
+    border-radius: 8px;
+}
+
+.stButton > button:hover {
+    background-color: #17447F;
+    color: #FFFFFF !important;
+    border: none;
+}
+
+/* Download buttons */
+.stDownloadButton > button {
+    background-color: #245DA5;
+    color: #FFFFFF !important;
+    border-radius: 8px;
+}
+
+/* Tabs */
+.stTabs [data-baseweb="tab"] {
+    color: #172B45 !important;
+    font-weight: 600;
+}
+
+.stTabs [aria-selected="true"] {
+    color: #245DA5 !important;
+}
+
+/* Dataframes */
+[data-testid="stDataFrame"] {
+    border: 1px solid #D4E2F5;
+    border-radius: 8px;
+}
+
+/* Expanders */
+[data-testid="stExpander"] {
+    border: 1px solid #D4E2F5;
+    border-radius: 10px;
+}
+
+/* Horizontal divider */
+hr {
+    border-color: #D4E2F5;
+}
+
+/* Select boxes and input fields */
+input, textarea {
+    color: #172B45 !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
 st.title("📊 Quiz Performance Dashboard")
+
 st.caption(
     "A clear summary of student scores, improvement, time usage, "
     "team performance and question-wise results."
 )
-
 # ============================================================
 # HELPER FUNCTIONS
 # ============================================================
@@ -220,46 +340,51 @@ def safe_mean(series):
 
 
 # ============================================================
-# DATA UPLOAD
+# AUTOMATIC DATA LOADING FROM GITHUB REPOSITORY
 # ============================================================
-with st.sidebar:
-    st.header("📁 Dataset")
-    uploaded_file = st.file_uploader(
-        "Upload your quiz results",
-        type=["csv", "xlsx", "xls"],
-        help="Upload the latest quiz export. The dashboard updates automatically."
+
+DATA_FILE = Path(__file__).parent / "Quiz_Results_Dummy.csv"
+
+if not DATA_FILE.exists():
+    st.error(
+        "Dataset not found. Please check that "
+        "Quiz_Results_Dummy.csv is available in the repository."
     )
-
-    st.divider()
-    st.header("⚙️ Display settings")
-    show_raw_data = st.checkbox("Show cleaned data preview", value=False)
-
-if uploaded_file is not None:
-    try:
-        if uploaded_file.name.lower().endswith(".csv"):
-            raw_data = pd.read_csv(uploaded_file)
-        else:
-            raw_data = pd.read_excel(uploaded_file)
-    except Exception as e:
-        st.error(f"Could not read the uploaded file: {e}")
-        st.stop()
-else:
-    st.info("Upload **Quiz_Results_Dummy.csv** (or your latest quiz export) from the sidebar to begin.")
     st.stop()
 
 try:
-    data, question_cols = prepare_data(raw_data)
+    raw_data = pd.read_csv(DATA_FILE)
+
 except Exception as e:
-    st.error(str(e))
+    st.error(f"Could not read the dataset: {e}")
     st.stop()
+
+
+# ============================================================
+# DATA PREPARATION
+# ============================================================
+
+try:
+    data, question_cols = prepare_data(raw_data)
+
+except Exception as e:
+    st.error(f"Data preparation error: {e}")
+    st.stop()
+
 
 if data.empty:
-    st.warning("No completed attempts with valid scores were found in this dataset.")
+    st.warning(
+        "No completed attempts with valid scores "
+        "were found in the dataset."
+    )
     st.stop()
 
-students = sorted(data["Student"].dropna().unique().tolist())
-student_summary = build_student_summary(data)
 
+students = sorted(
+    data["Student"].dropna().unique().tolist()
+)
+
+student_summary = build_student_summary(data)
 # ============================================================
 # TEAM CONFIGURATION
 # ============================================================
@@ -405,7 +530,7 @@ with tabs[0]:
             labels={"Score": "Score out of 15", "count": "Number of attempts"}
         )
         fig.update_layout(bargap=0.12)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     with right:
         bands = pd.cut(
