@@ -1,146 +1,89 @@
 import re
-import io
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import streamlit as st
 import plotly.express as px
-import plotly.graph_objects as go
-from pathlib import Path
 
 # ============================================================
-# PAGE CONFIGURATION
+# PAGE CONFIGURATION AND THEME
 # ============================================================
-# ============================================================
-# PAGE CONFIGURATION
-# ============================================================
-
 st.set_page_config(
     page_title="Quiz Performance Dashboard",
     page_icon="📊",
     layout="wide"
 )
 
-# ============================================================
-# BLUE AND WHITE THEME
-# ============================================================
-
 st.markdown("""
 <style>
-
-/* Main application */
 .stApp {
-    background-color: #FFFFFF;
+    background: #FFFFFF;
     color: #172B45;
 }
-
-/* Main content */
 .block-container {
-    padding-top: 2rem;
+    padding-top: 1.8rem;
     padding-bottom: 2rem;
 }
-
-/* Headings */
 h1, h2, h3, h4 {
     color: #173B70 !important;
 }
-
-/* Normal text */
-p, label, span, div {
-    color: #172B45;
-}
-
-/* Sidebar */
 [data-testid="stSidebar"] {
-    background-color: #EAF2FF;
+    background: #EAF2FF;
 }
-
-/* Sidebar headings */
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3 {
     color: #173B70 !important;
 }
-
-/* Metric cards */
 [data-testid="stMetric"] {
-    background-color: #F0F5FF;
+    background: #F0F5FF;
     border: 1px solid #D4E2F5;
-    padding: 15px;
+    padding: 13px;
     border-radius: 12px;
 }
-
-/* Metric values */
 [data-testid="stMetricValue"] {
     color: #174A8B !important;
 }
-
-/* Metric labels */
 [data-testid="stMetricLabel"] {
     color: #172B45 !important;
 }
-
-/* Buttons */
-.stButton > button {
-    background-color: #245DA5;
-    color: #FFFFFF !important;
-    border: none;
-    border-radius: 8px;
-}
-
-.stButton > button:hover {
-    background-color: #17447F;
-    color: #FFFFFF !important;
-    border: none;
-}
-
-/* Download buttons */
+.stButton > button,
 .stDownloadButton > button {
-    background-color: #245DA5;
+    background: #245DA5;
     color: #FFFFFF !important;
+    border: 0;
     border-radius: 8px;
 }
-
-/* Tabs */
+.stButton > button:hover,
+.stDownloadButton > button:hover {
+    background: #17447F;
+    color: #FFFFFF !important;
+}
 .stTabs [data-baseweb="tab"] {
     color: #172B45 !important;
     font-weight: 600;
 }
-
 .stTabs [aria-selected="true"] {
     color: #245DA5 !important;
 }
-
-/* Dataframes */
-[data-testid="stDataFrame"] {
+[data-testid="stDataFrame"],
+[data-testid="stExpander"] {
     border: 1px solid #D4E2F5;
     border-radius: 8px;
 }
-
-/* Expanders */
-[data-testid="stExpander"] {
-    border: 1px solid #D4E2F5;
-    border-radius: 10px;
-}
-
-/* Horizontal divider */
 hr {
     border-color: #D4E2F5;
 }
-
-/* Select boxes and input fields */
-input, textarea {
-    color: #172B45 !important;
-}
-
 </style>
 """, unsafe_allow_html=True)
 
 st.title("📊 Quiz Performance Dashboard")
-
 st.caption(
     "A clear summary of student scores, improvement, time usage, "
     "team performance and question-wise results."
 )
+
 # ============================================================
 # HELPER FUNCTIONS
 # ============================================================
@@ -158,7 +101,6 @@ def parse_duration(value):
     if pd.isna(value):
         return np.nan
 
-    # Numeric durations are assumed to be seconds.
     if isinstance(value, (int, float, np.integer, np.floating)):
         return float(value) / 60
 
@@ -170,7 +112,6 @@ def parse_duration(value):
     minutes = re.search(r"(\d+(?:\.\d+)?)\s*(?:minutes?|mins?|m)\b", text)
     seconds = re.search(r"(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b", text)
 
-    # Handle a plain number as minutes.
     if not hours and not minutes and not seconds:
         try:
             return float(text)
@@ -196,12 +137,8 @@ def format_minutes(value):
     return f"{sign}{mins} min {secs:02d} sec"
 
 
-def format_score(value):
-    return "N/A" if pd.isna(value) else f"{value:.2f}/15"
-
-
 def prepare_data(raw):
-    """Clean the uploaded Moodle-style quiz export."""
+    """Clean the Moodle-style quiz export."""
     df = raw.copy()
     df.columns = [str(c).strip() for c in df.columns]
 
@@ -217,23 +154,26 @@ def prepare_data(raw):
     if first_col is None:
         raise ValueError("The dataset must contain a 'First name' column.")
     if grade_col is None:
-        raise ValueError("Could not find the quiz grade column (for example, Grade/15.00).")
+        raise ValueError(
+            "Could not find the quiz grade column (for example, Grade/15.00)."
+        )
 
-    # Remove Moodle's overall-average/footer row and blank rows.
     df = df[df[first_col].notna()].copy()
-    df = df[~df[first_col].astype(str).str.strip().str.lower().isin(
-        ["overall average", "overallaverage", "average"]
-    )].copy()
+    df = df[
+        ~df[first_col].astype(str).str.strip().str.lower().isin(
+            ["overall average", "overallaverage", "average"]
+        )
+    ].copy()
 
-    # Keep submitted/completed attempts only when a status column exists.
     if status_col is not None:
         status = df[status_col].astype(str).str.strip().str.lower()
-        finished = status.str.contains(r"finish|complete|submit", regex=True, na=False)
+        finished = status.str.contains(
+            r"finish|complete|submit", regex=True, na=False
+        )
         df = df[finished].copy()
 
-    # Construct readable student names. The new file uses values such as
-    # "MeeraKrishnan" in First name and "Dummy@2026" in Last name.
     first_values = df[first_col].fillna("").astype(str).str.strip()
+
     if last_col is not None:
         last_values = df[last_col].fillna("").astype(str).str.strip()
         use_last = (
@@ -242,18 +182,20 @@ def prepare_data(raw):
             & ~last_values.str.lower().isin(["nan", "none"])
         )
         df["Student"] = np.where(
-            use_last,
-            first_values + " " + last_values,
-            first_values
+            use_last, first_values + " " + last_values, first_values
         )
     else:
         df["Student"] = first_values
 
-    df["Student"] = df["Student"].str.replace(r"\s+", " ", regex=True).str.strip()
+    df["Student"] = (
+        df["Student"].str.replace(r"\s+", " ", regex=True).str.strip()
+    )
 
-    # Stable identifier: email if available, otherwise student name.
     if email_col is not None:
-        df["_student_id"] = df[email_col].fillna(df["Student"]).astype(str).str.strip().str.lower()
+        df["_student_id"] = (
+            df[email_col].fillna(df["Student"])
+            .astype(str).str.strip().str.lower()
+        )
     else:
         df["_student_id"] = df["Student"].str.lower()
 
@@ -262,60 +204,62 @@ def prepare_data(raw):
         errors="coerce"
     )
 
-    # Identify question columns in formats such as Q1, Q. 1 /1.00.
     question_map = {}
     for col in df.columns:
         match = re.search(r"q\.?\s*(\d+)", str(col), flags=re.IGNORECASE)
         if match:
             question_map[col] = f"Q{int(match.group(1))}"
 
-    question_cols = list(question_map.keys())
     for old_col, new_col in question_map.items():
         df[new_col] = pd.to_numeric(
             df[old_col].astype(str).str.replace(",", "", regex=False),
             errors="coerce"
         )
 
-    question_cols_clean = [question_map[c] for c in question_cols]
-    question_cols_clean = sorted(
-        set(question_cols_clean),
+    question_cols = sorted(
+        set(question_map.values()),
         key=lambda x: int(re.search(r"\d+", x).group())
     )
 
-    # Parse dates and durations.
-    df["Started_dt"] = pd.to_datetime(
-        df[started_col], errors="coerce", dayfirst=True
-    ) if started_col is not None else pd.NaT
+    df["Started_dt"] = (
+        pd.to_datetime(df[started_col], errors="coerce", dayfirst=True)
+        if started_col is not None else pd.NaT
+    )
+    df["Completed_dt"] = (
+        pd.to_datetime(df[completed_col], errors="coerce", dayfirst=True)
+        if completed_col is not None else pd.NaT
+    )
 
-    df["Completed_dt"] = pd.to_datetime(
-        df[completed_col], errors="coerce", dayfirst=True
-    ) if completed_col is not None else pd.NaT
+    df["Time_min"] = (
+        df[duration_col].apply(parse_duration)
+        if duration_col is not None else np.nan
+    )
 
-    df["Time_min"] = df[duration_col].apply(parse_duration) if duration_col is not None else np.nan
-
-    # If duration is absent, calculate it from start and completion timestamps.
-    if duration_col is None and started_col is not None and completed_col is not None:
+    if (
+        duration_col is None
+        and started_col is not None
+        and completed_col is not None
+    ):
         df["Time_min"] = (
-            (df["Completed_dt"] - df["Started_dt"]).dt.total_seconds() / 60
-        )
+            df["Completed_dt"] - df["Started_dt"]
+        ).dt.total_seconds() / 60
 
-    df = df[df["Score"].notna()].copy()
-    df = df[df["Student"].ne("")].copy()
+    df = df[df["Score"].notna() & df["Student"].ne("")].copy()
     df = df.sort_values(
-        ["_student_id", "Started_dt"],
-        na_position="last"
+        ["_student_id", "Started_dt"], na_position="last"
     ).reset_index(drop=True)
 
     df["Attempt"] = df.groupby("_student_id").cumcount() + 1
     df["Attempt_Label"] = "Attempt " + df["Attempt"].astype(str)
-
-    # Keep scores within the quiz's possible range.
     df["Score"] = df["Score"].clip(lower=0, upper=15)
-    return df, question_cols_clean
+
+    return df, question_cols
 
 
 def build_student_summary(data):
-    summary = data.groupby(["_student_id", "Student"], as_index=False).agg(
+    summary = data.groupby(
+        ["_student_id", "Student"], as_index=False
+    ).agg(
         Attempts=("Score", "count"),
         Average_Score=("Score", "mean"),
         Best_Score=("Score", "max"),
@@ -325,90 +269,91 @@ def build_student_summary(data):
         Total_Time=("Time_min", "sum"),
         Score_SD=("Score", "std")
     )
-    summary["Improvement"] = summary["Latest_Score"] - summary["First_Score"]
+
+    summary["Improvement"] = (
+        summary["Latest_Score"] - summary["First_Score"]
+    )
     summary["Improvement_Pct"] = np.where(
         summary["First_Score"] > 0,
         summary["Improvement"] / summary["First_Score"] * 100,
         np.nan
     )
     summary["Score_SD"] = summary["Score_SD"].fillna(0)
+
     return summary.sort_values("Average_Score", ascending=False)
 
 
-def safe_mean(series):
-    return float(series.mean()) if series.notna().any() else np.nan
-
-
 # ============================================================
-# AUTOMATIC DATA LOADING FROM GITHUB REPOSITORY
+# AUTOMATIC DATA LOADING FROM REPOSITORY
+# Keep app.py and Quiz_Results_Dummy.csv in the same folder.
 # ============================================================
-
-DATA_FILE = Path(__file__).parent / "Quiz_Results_Dummy.csv"
+DATA_FILE = Path(__file__).resolve().parent / "Quiz_Results_Dummy.csv"
 
 if not DATA_FILE.exists():
     st.error(
-        "Dataset not found. Please check that "
-        "Quiz_Results_Dummy.csv is available in the repository."
+        "Dataset not found. Make sure Quiz_Results_Dummy.csv "
+        "is in the same GitHub folder as app.py."
     )
     st.stop()
 
 try:
     raw_data = pd.read_csv(DATA_FILE)
-
 except Exception as e:
     st.error(f"Could not read the dataset: {e}")
     st.stop()
 
-
-# ============================================================
-# DATA PREPARATION
-# ============================================================
-
 try:
     data, question_cols = prepare_data(raw_data)
-
 except Exception as e:
     st.error(f"Data preparation error: {e}")
     st.stop()
 
-
 if data.empty:
-    st.warning(
-        "No completed attempts with valid scores "
-        "were found in the dataset."
-    )
+    st.warning("No completed attempts with valid scores were found.")
     st.stop()
 
-
-students = sorted(
-    data["Student"].dropna().unique().tolist()
-)
-
+students = sorted(data["Student"].dropna().unique().tolist())
 student_summary = build_student_summary(data)
+
 # ============================================================
-# TEAM CONFIGURATION
+# SIDEBAR SETTINGS — NO FILE UPLOADER
 # ============================================================
 with st.sidebar:
+    st.header("⚙️ Display settings")
+    show_raw_data = st.checkbox(
+        "Show cleaned data preview",
+        value=False
+    )
+
     st.divider()
     st.header("👥 Team configuration")
     st.caption(
-        "This dataset has no Team column. Assign students here. "
-        "The team comparison will use these selections."
+        "Assign students to teams. Team assignments apply to this "
+        "app session."
     )
 
     team1_name = st.text_input("Team 1 name", value="Team 1")
     team2_name = st.text_input("Team 2 name", value="Team 2")
 
+    team1_name = team1_name.strip() or "Team 1"
+    team2_name = team2_name.strip() or "Team 2"
+
     team1_members = st.multiselect(
-        f"Students in {team1_name or 'Team 1'}",
+        f"Students in {team1_name}",
         options=students,
-        default=[]
+        default=[],
+        key="team1_members"
     )
-    remaining_students = [s for s in students if s not in team1_members]
+
+    remaining_students = [
+        s for s in students if s not in team1_members
+    ]
+
     team2_members = st.multiselect(
-        f"Students in {team2_name or 'Team 2'}",
+        f"Students in {team2_name}",
         options=remaining_students,
-        default=[]
+        default=[],
+        key="team2_members"
     )
 
     unassigned = [
@@ -416,29 +361,30 @@ with st.sidebar:
         if s not in team1_members and s not in team2_members
     ]
 
-team1_name = team1_name.strip() or "Team 1"
-team2_name = team2_name.strip() or "Team 2"
+    st.divider()
+    st.header("🔎 Student filter")
+    selected_students = st.multiselect(
+        "Select students",
+        options=students,
+        default=students,
+        key="student_filter"
+    )
 
 team_lookup = {s: team1_name for s in team1_members}
 team_lookup.update({s: team2_name for s in team2_members})
-data["Team"] = data["Student"].map(team_lookup).fillna("Unassigned")
-student_summary["Team"] = student_summary["Student"].map(team_lookup).fillna("Unassigned")
 
-# Add a student filter to the sidebar.
-with st.sidebar:
-    st.divider()
-    selected_students = st.multiselect(
-        "Filter students",
-        options=students,
-        default=students
-    )
+data["Team"] = data["Student"].map(team_lookup).fillna("Unassigned")
+student_summary["Team"] = (
+    student_summary["Student"].map(team_lookup).fillna("Unassigned")
+)
 
 filtered = data[data["Student"].isin(selected_students)].copy()
-filtered_summary = build_student_summary(filtered) if not filtered.empty else student_summary.iloc[0:0].copy()
+filtered_summary = (
+    build_student_summary(filtered)
+    if not filtered.empty
+    else student_summary.iloc[0:0].copy()
+)
 
-# Reattach team labels after rebuilding the filtered student summary.
-# build_student_summary() calculates performance measures but does not
-# create the Team column itself.
 if not filtered_summary.empty:
     filtered_summary["Team"] = (
         filtered_summary["Student"].map(team_lookup).fillna("Unassigned")
@@ -456,23 +402,24 @@ if filtered.empty:
 total_students = filtered["Student"].nunique()
 total_attempts = len(filtered)
 class_average = filtered["Score"].mean()
-average_improvement = filtered_summary["Improvement"].mean() if not filtered_summary.empty else np.nan
+average_improvement = (
+    filtered_summary["Improvement"].mean()
+    if not filtered_summary.empty else np.nan
+)
 average_time = filtered["Time_min"].mean()
 perfect_attempts = int((filtered["Score"] == 15).sum())
 
 st.subheader("Class at a glance")
 k1, k2, k3, k4, k5 = st.columns(5)
-k1.metric("Students", f"{total_students}")
-k2.metric("Completed attempts", f"{total_attempts}")
+k1.metric("Students", total_students)
+k2.metric("Completed attempts", total_attempts)
 k3.metric("Average score", f"{class_average:.2f}/15")
 k4.metric(
     "Average improvement",
-    f"{average_improvement:+.2f}" if pd.notna(average_improvement) else "N/A"
+    f"{average_improvement:+.2f}"
+    if pd.notna(average_improvement) else "N/A"
 )
-k5.metric(
-    "Average time",
-    format_minutes(average_time)
-)
+k5.metric("Average time", format_minutes(average_time))
 
 top_student = (
     filtered_summary.sort_values("Average_Score", ascending=False).iloc[0]
@@ -500,7 +447,7 @@ with st.expander("Important findings", expanded=True):
     c3.metric("Perfect-score attempts", perfect_attempts)
 
 # ============================================================
-# TABS
+# DASHBOARD TABS
 # ============================================================
 tabs = st.tabs([
     "Overview",
@@ -527,7 +474,11 @@ with tabs[0]:
             x="Score",
             nbins=15,
             title="Distribution of all attempt scores",
-            labels={"Score": "Score out of 15", "count": "Number of attempts"}
+            labels={
+                "Score": "Score out of 15",
+                "count": "Number of attempts"
+            },
+            color_discrete_sequence=["#2864B0"]
         )
         fig.update_layout(bargap=0.12)
         st.plotly_chart(fig, width="stretch")
@@ -538,50 +489,56 @@ with tabs[0]:
             bins=[-0.01, 5, 10, 12, 15],
             labels=["0–5", "Above 5–10", "Above 10–12", "Above 12–15"]
         )
-        band_counts = bands.value_counts().reindex(
-            ["0–5", "Above 5–10", "Above 10–12", "Above 12–15"],
-            fill_value=0
-        ).reset_index()
+        band_counts = (
+            bands.value_counts()
+            .reindex(
+                ["0–5", "Above 5–10", "Above 10–12", "Above 12–15"],
+                fill_value=0
+            )
+            .reset_index()
+        )
         band_counts.columns = ["Score range", "Attempts"]
+
         fig = px.bar(
             band_counts,
             x="Score range",
             y="Attempts",
             title="Performance bands",
-            text="Attempts"
+            text="Attempts",
+            color_discrete_sequence=["#2864B0"]
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     st.subheader("Average score by student")
-    avg_plot = filtered_summary.sort_values("Average_Score", ascending=True)
+    avg_plot = filtered_summary.sort_values(
+        "Average_Score", ascending=True
+    )
     fig = px.bar(
         avg_plot,
         x="Average_Score",
         y="Student",
         orientation="h",
         text=avg_plot["Average_Score"].round(2),
-        labels={"Average_Score": "Average score out of 15"}
+        labels={"Average_Score": "Average score out of 15"},
+        color_discrete_sequence=["#2864B0"]
     )
     fig.update_xaxes(range=[0, 15])
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # ------------------------------------------------------------
 # TAB 2: STUDENT PERFORMANCE
 # ------------------------------------------------------------
 with tabs[1]:
     st.subheader("Student-wise performance")
-    display = filtered_summary.copy()
-    display = display.rename(columns={
-        "Attempts": "Attempts",
+    display = filtered_summary.rename(columns={
         "Average_Score": "Average score",
         "Best_Score": "Best score",
         "Latest_Score": "Latest score",
         "First_Score": "First score",
-        "Improvement": "Improvement",
         "Average_Time": "Average time (min)",
-        "Score_SD": "Score SD",
-        "Team": "Team"
+        "Score_SD": "Score SD"
     })
+
     columns_to_show = [
         "Student", "Team", "Attempts", "Average score", "Best score",
         "First score", "Latest score", "Improvement",
@@ -589,22 +546,25 @@ with tabs[1]:
     ]
     st.dataframe(
         display[columns_to_show].round(2),
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
+    available_students = sorted(filtered["Student"].unique().tolist())
     chosen_student = st.selectbox(
         "Select a student for detailed analysis",
-        options=students
+        options=available_students
     )
+
     one = filtered[filtered["Student"] == chosen_student].sort_values(
         ["Started_dt", "Attempt"], na_position="last"
     )
+
     if not one.empty:
         a, b, c = st.columns(3)
         a.metric("Attempts", len(one))
-        a.metric("Average score", f'{one["Score"].mean():.2f}/15')
-        a.metric("Best score", f'{one["Score"].max():.2f}/15')
+        b.metric("Average score", f'{one["Score"].mean():.2f}/15')
+        c.metric("Best score", f'{one["Score"].max():.2f}/15')
 
         fig = px.line(
             one,
@@ -612,10 +572,14 @@ with tabs[1]:
             y="Score",
             markers=True,
             title=f"Score progression: {chosen_student}",
-            labels={"Score": "Score out of 15", "Attempt": "Attempt number"}
+            labels={
+                "Score": "Score out of 15",
+                "Attempt": "Attempt number"
+            }
         )
         fig.update_yaxes(range=[0, 15])
-        st.plotly_chart(fig, use_container_width=True)
+        fig.update_traces(line_color="#2864B0")
+        st.plotly_chart(fig, width="stretch")
 
         detail_cols = ["Attempt", "Started_dt", "Score", "Time_min"]
         st.dataframe(
@@ -623,7 +587,7 @@ with tabs[1]:
                 "Started_dt": "Started",
                 "Time_min": "Time (minutes)"
             }).round(2),
-            use_container_width=True,
+            width="stretch",
             hide_index=True
         )
 
@@ -633,16 +597,18 @@ with tabs[1]:
 with tabs[2]:
     st.subheader("Improvement from first attempt to latest attempt")
     imp = filtered_summary.sort_values("Improvement", ascending=False)
+
     fig = px.bar(
         imp,
         x="Student",
         y="Improvement",
         color="Improvement",
         title="First-to-latest score change",
-        labels={"Improvement": "Change in marks"}
+        labels={"Improvement": "Change in marks"},
+        color_continuous_scale=["#A9C7EA", "#2864B0"]
     )
     fig.add_hline(y=0, line_dash="dash")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     st.dataframe(
         imp[[
@@ -654,13 +620,14 @@ with tabs[2]:
             "Improvement": "Improvement (marks)",
             "Improvement_Pct": "Improvement (%)"
         }).round(2),
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
     improved = int((filtered_summary["Improvement"] > 0).sum())
     unchanged = int((filtered_summary["Improvement"] == 0).sum())
     declined = int((filtered_summary["Improvement"] < 0).sum())
+
     x1, x2, x3 = st.columns(3)
     x1.metric("Students improved", improved)
     x2.metric("No change", unchanged)
@@ -672,7 +639,7 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("Compare the first 20% and last 20% of attempts")
     st.caption(
-        "For each student, attempts are ordered by the Started timestamp. "
+        "Attempts are ordered by the Started timestamp. "
         "At least one attempt is included in each group."
     )
 
@@ -683,6 +650,7 @@ with tabs[3]:
         group = group.sort_values("Started_dt", na_position="last")
         n = len(group)
         count = max(1, int(np.ceil(n * 0.20)))
+
         first_group = group.head(count)
         last_group = group.tail(count)
 
@@ -702,8 +670,9 @@ with tabs[3]:
             "Time saved (minutes)": first_time - last_time
         })
 
-    comparison = pd.DataFrame(comparison_rows)
-    comparison = comparison.sort_values("Score change", ascending=False)
+    comparison = pd.DataFrame(comparison_rows).sort_values(
+        "Score change", ascending=False
+    )
 
     m1, m2 = st.columns(2)
     m1.metric(
@@ -720,31 +689,41 @@ with tabs[3]:
         x="Student",
         y=["First 20% average score", "Last 20% average score"],
         barmode="group",
-        title="Score comparison: first 20% vs last 20%"
+        title="Score comparison: first 20% vs last 20%",
+        color_discrete_sequence=["#A9C7EA", "#2864B0"]
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     fig = px.bar(
         comparison,
         x="Student",
         y="Score change",
         title="Change in average score",
-        color="Score change"
+        color="Score change",
+        color_continuous_scale=["#A9C7EA", "#2864B0"]
     )
     fig.add_hline(y=0, line_dash="dash")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     time_display = comparison.copy()
-    time_display["First 20% average time"] = time_display["First 20% average time"].apply(format_minutes)
-    time_display["Last 20% average time"] = time_display["Last 20% average time"].apply(format_minutes)
-    time_display["Time saved"] = time_display["Time saved (minutes)"].apply(format_minutes)
+    time_display["First 20% average time"] = (
+        time_display["First 20% average time"].apply(format_minutes)
+    )
+    time_display["Last 20% average time"] = (
+        time_display["Last 20% average time"].apply(format_minutes)
+    )
+    time_display["Time saved"] = (
+        time_display["Time saved (minutes)"].apply(format_minutes)
+    )
+
     st.dataframe(
         time_display[[
             "Student", "Attempts", "First 20% average score",
             "Last 20% average score", "Score change",
-            "First 20% average time", "Last 20% average time", "Time saved"
+            "First 20% average time", "Last 20% average time",
+            "Time saved"
         ]].round(2),
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -756,10 +735,13 @@ with tabs[4]:
     timed = filtered.dropna(subset=["Time_min"]).copy()
 
     if timed.empty:
-        st.info("No usable duration values were found in the uploaded data.")
+        st.info("No usable duration values were found in the dataset.")
     else:
         t1, t2, t3 = st.columns(3)
-        t1.metric("Average completion time", format_minutes(timed["Time_min"].mean()))
+        t1.metric(
+            "Average completion time",
+            format_minutes(timed["Time_min"].mean())
+        )
         t2.metric("Fastest attempt", format_minutes(timed["Time_min"].min()))
         t3.metric("Longest attempt", format_minutes(timed["Time_min"].max()))
 
@@ -770,10 +752,13 @@ with tabs[4]:
             color="Student",
             hover_data=["Attempt"],
             title="Relationship between time taken and score",
-            labels={"Time_min": "Time taken (minutes)", "Score": "Score out of 15"}
+            labels={
+                "Time_min": "Time taken (minutes)",
+                "Score": "Score out of 15"
+            }
         )
         fig.update_yaxes(range=[0, 15])
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         student_time = timed.groupby("Student", as_index=False).agg(
             Average_Time=("Time_min", "mean"),
@@ -784,19 +769,27 @@ with tabs[4]:
             x="Student",
             y="Average_Time",
             title="Average time taken by student",
-            labels={"Average_Time": "Average time (minutes)"}
+            labels={"Average_Time": "Average time (minutes)"},
+            color_discrete_sequence=["#2864B0"]
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         timed["Score_per_Minute"] = np.where(
             timed["Time_min"] > 0,
             timed["Score"] / timed["Time_min"],
             np.nan
         )
-        efficiency = timed.groupby("Student", as_index=False)["Score_per_Minute"].mean()
-        efficiency = efficiency.sort_values("Score_per_Minute", ascending=False)
+        efficiency = (
+            timed.groupby("Student", as_index=False)["Score_per_Minute"]
+            .mean()
+            .sort_values("Score_per_Minute", ascending=False)
+        )
         st.markdown("**Average score per minute**")
-        st.dataframe(efficiency.round(3), use_container_width=True, hide_index=True)
+        st.dataframe(
+            efficiency.round(3),
+            width="stretch",
+            hide_index=True
+        )
 
 # ------------------------------------------------------------
 # TAB 6: ATTEMPTS AND ACTIVITY
@@ -813,9 +806,10 @@ with tabs[5]:
         x="Student",
         y="Attempts",
         color="Attempts",
-        title="Number of completed attempts per student"
+        title="Number of completed attempts per student",
+        color_continuous_scale=["#A9C7EA", "#2864B0"]
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     if filtered["Started_dt"].notna().any():
         daily = (
@@ -832,9 +826,14 @@ with tabs[5]:
             markers=True,
             title="Attempts over time"
         )
-        st.plotly_chart(fig, use_container_width=True)
+        fig.update_traces(line_color="#2864B0")
+        st.plotly_chart(fig, width="stretch")
 
-    st.dataframe(attempt_counts, use_container_width=True, hide_index=True)
+    st.dataframe(
+        attempt_counts,
+        width="stretch",
+        hide_index=True
+    )
 
 # ------------------------------------------------------------
 # TAB 7: TEAM COMPARISON
@@ -845,8 +844,8 @@ with tabs[6]:
 
     if assigned_data.empty:
         st.info(
-            "No team members have been assigned yet. Use the Team configuration "
-            "section in the sidebar to create teams and assign students."
+            "No team members have been assigned yet. Use the Team "
+            "configuration section in the sidebar to assign students."
         )
     else:
         team_summary = assigned_data.groupby("Team", as_index=False).agg(
@@ -858,13 +857,20 @@ with tabs[6]:
         )
 
         team_improvement = (
-            student_summary[student_summary["Team"].ne("Unassigned")]
-            .groupby("Team", as_index=False)["Improvement"].mean()
+            filtered_summary[filtered_summary["Team"].ne("Unassigned")]
+            .groupby("Team", as_index=False)["Improvement"]
+            .mean()
             .rename(columns={"Improvement": "Average improvement"})
         )
-        team_summary = team_summary.merge(team_improvement, on="Team", how="left")
+        team_summary = team_summary.merge(
+            team_improvement, on="Team", how="left"
+        )
 
-        st.dataframe(team_summary.round(2), use_container_width=True, hide_index=True)
+        st.dataframe(
+            team_summary.round(2),
+            width="stretch",
+            hide_index=True
+        )
 
         fig = px.bar(
             team_summary,
@@ -876,7 +882,7 @@ with tabs[6]:
             labels={"Average_Score": "Average score out of 15"}
         )
         fig.update_yaxes(range=[0, 15])
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         fig = px.bar(
             team_summary,
@@ -886,9 +892,12 @@ with tabs[6]:
             title="Average first-to-latest improvement by team"
         )
         fig.add_hline(y=0, line_dash="dash")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
-        team_scores = assigned_data.groupby(["Team", "Student"], as_index=False)["Score"].mean()
+        team_scores = assigned_data.groupby(
+            ["Team", "Student"], as_index=False
+        )["Score"].mean()
+
         fig = px.bar(
             team_scores,
             x="Student",
@@ -897,7 +906,7 @@ with tabs[6]:
             title="Student average scores within teams"
         )
         fig.update_yaxes(range=[0, 15])
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     if unassigned:
         st.caption("Not assigned to a team: " + ", ".join(unassigned))
@@ -907,10 +916,16 @@ with tabs[6]:
 # ------------------------------------------------------------
 with tabs[7]:
     st.subheader("Question-wise analysis")
+
     if not question_cols:
-        st.warning("No question columns were detected. Expected columns such as 'Q. 1 /1.00'.")
+        st.warning(
+            "No question columns were detected. Expected columns such as "
+            "'Q. 1 /1.00'."
+        )
+        q_summary = pd.DataFrame()
     else:
         question_summary = []
+
         for q in question_cols:
             values = pd.to_numeric(filtered[q], errors="coerce")
             question_summary.append({
@@ -918,10 +933,13 @@ with tabs[7]:
                 "Correct responses": int((values == 1).sum()),
                 "Incorrect responses": int((values == 0).sum()),
                 "Responses": int(values.notna().sum()),
-                "Accuracy (%)": values.mean() * 100 if values.notna().any() else np.nan
+                "Accuracy (%)": (
+                    values.mean() * 100 if values.notna().any() else np.nan
+                )
             })
 
         q_summary = pd.DataFrame(question_summary).sort_values("Question")
+
         fig = px.bar(
             q_summary,
             x="Question",
@@ -929,31 +947,47 @@ with tabs[7]:
             color="Accuracy (%)",
             text=q_summary["Accuracy (%)"].round(1),
             title="Question-wise accuracy",
-            labels={"Accuracy (%)": "Correct responses (%)"}
+            labels={"Accuracy (%)": "Correct responses (%)"},
+            color_continuous_scale=["#A9C7EA", "#2864B0"]
         )
         fig.update_yaxes(range=[0, 100])
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         valid_q = q_summary.dropna(subset=["Accuracy (%)"])
         if not valid_q.empty:
             easiest = valid_q.loc[valid_q["Accuracy (%)"].idxmax()]
             hardest = valid_q.loc[valid_q["Accuracy (%)"].idxmin()]
             e1, e2 = st.columns(2)
-            e1.metric("Highest accuracy", easiest["Question"], f'{easiest["Accuracy (%)"]:.1f}%')
-            e2.metric("Lowest accuracy", hardest["Question"], f'{hardest["Accuracy (%)"]:.1f}%')
+            e1.metric(
+                "Highest accuracy",
+                easiest["Question"],
+                f'{easiest["Accuracy (%)"]:.1f}%'
+            )
+            e2.metric(
+                "Lowest accuracy",
+                hardest["Question"],
+                f'{hardest["Accuracy (%)"]:.1f}%'
+            )
 
-        st.dataframe(q_summary.round(2), use_container_width=True, hide_index=True)
+        st.dataframe(
+            q_summary.round(2),
+            width="stretch",
+            hide_index=True
+        )
 
         st.markdown("**Question response matrix**")
         q_matrix = filtered.groupby("Student")[question_cols].mean() * 100
-        st.dataframe(q_matrix.round(1), use_container_width=True)
+        st.dataframe(
+            q_matrix.round(1),
+            width="stretch"
+        )
 
 # ------------------------------------------------------------
 # TAB 9: DATA AND DOWNLOADS
 # ------------------------------------------------------------
 with tabs[8]:
     st.subheader("Cleaned dataset and downloads")
-    st.write(f"Original rows in uploaded file: **{len(raw_data)}**")
+    st.write(f"Original rows in repository dataset: **{len(raw_data)}**")
     st.write(f"Valid completed attempts used: **{len(data)}**")
     st.write(f"Students identified: **{data['Student'].nunique()}**")
 
@@ -964,7 +998,11 @@ with tabs[8]:
             "Score", "Time_min"
         ] + question_cols
         display_cols = [c for c in display_cols if c in data.columns]
-        st.dataframe(data[display_cols], use_container_width=True, hide_index=True)
+        st.dataframe(
+            data[display_cols],
+            width="stretch",
+            hide_index=True
+        )
 
     csv_attempts = data.to_csv(index=False).encode("utf-8-sig")
     st.download_button(
@@ -982,7 +1020,7 @@ with tabs[8]:
         mime="text/csv"
     )
 
-    if question_cols:
+    if not q_summary.empty:
         q_csv = q_summary.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
             "⬇️ Download question analysis (CSV)",
@@ -992,9 +1030,12 @@ with tabs[8]:
         )
 
     st.caption(
-        "Team assignments are selected in the sidebar for the current app session. "
-        "The uploaded CSV itself is not modified."
+        "Team assignments are selected in the sidebar for the current "
+        "app session. The repository CSV is not modified."
     )
 
 st.divider()
-st.caption("Quiz Performance Dashboard | Data is recalculated from the uploaded file.")
+st.caption(
+    "Quiz Performance Dashboard | Data is automatically loaded "
+    "from the repository dataset."
+)
